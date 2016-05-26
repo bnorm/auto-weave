@@ -37,7 +37,7 @@ public class BasicTest extends TestCase {
                 "package com.bnorm.auto.weave;",
                 "",
                 "public class TraceAspect {",
-                "    @AutoAspect(Trace.class)",
+                "    @AutoAdvice(Trace.class)",
                 "    public Object around(AroundJoinPoint point) throws Throwable {",
                 "        return point.proceed();",
                 "    }",

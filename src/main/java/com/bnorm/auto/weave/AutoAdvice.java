@@ -8,7 +8,7 @@ import java.lang.annotation.Target;
 
 @Target({ElementType.METHOD})
 @Retention(RetentionPolicy.SOURCE)
-public @interface AutoAspect {
+public @interface AutoAdvice {
 
     Class<? extends Annotation>[] value();
 }

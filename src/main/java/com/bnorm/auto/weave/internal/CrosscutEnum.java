@@ -10,6 +10,9 @@ import com.bnorm.auto.weave.AfterReturningJoinPoint;
 import com.bnorm.auto.weave.AfterThrowingJoinPoint;
 import com.bnorm.auto.weave.AroundJoinPoint;
 import com.bnorm.auto.weave.BeforeJoinPoint;
+import com.bnorm.auto.weave.internal.chain.AfterChain;
+import com.bnorm.auto.weave.internal.chain.AfterReturningChain;
+import com.bnorm.auto.weave.internal.chain.AfterThrowingChain;
 import com.bnorm.auto.weave.internal.chain.AroundChain;
 import com.bnorm.auto.weave.internal.chain.BeforeChain;
 import com.bnorm.auto.weave.internal.chain.Chain;
@@ -18,9 +21,9 @@ import com.squareup.javapoet.TypeSpec;
 
 enum CrosscutEnum {
     Before(BeforeJoinPoint.class, BeforeChain.class, void.class),
-    After(AfterJoinPoint.class, null, void.class),
-    AfterReturning(AfterReturningJoinPoint.class, null, void.class),
-    AfterThrowing(AfterThrowingJoinPoint.class, null, void.class),
+    After(AfterJoinPoint.class, AfterChain.class, void.class),
+    AfterReturning(AfterReturningJoinPoint.class, AfterReturningChain.class, void.class),
+    AfterThrowing(AfterThrowingJoinPoint.class, AfterThrowingChain.class, void.class),
     Around(AroundJoinPoint.class, AroundChain.class, Object.class),
 
     // End of enumeration
@@ -45,7 +48,7 @@ enum CrosscutEnum {
         this.joinPoint = joinPoint;
         this.chain = chain;
         this.returnType = returnType;
-        this.lowerCaseName = name().toLowerCase();
+        this.lowerCaseName = Names.classToVariable(name());
     }
 
     public TypeSpec getChain(String pointcut, String aspectFieldName, String aspectMethodName) {

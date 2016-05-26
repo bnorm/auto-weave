@@ -13,7 +13,7 @@ public abstract class AroundChain extends Chain {
     }
 
     public final Object call() throws Throwable {
-        return around();
+        return around(aroundJoinPoint);
     }
 
     protected abstract Object around(AroundJoinPoint around) throws Throwable;
