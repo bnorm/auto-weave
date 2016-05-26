@@ -2,8 +2,6 @@ package com.bnorm.auto.weave.internal;
 
 import java.io.IOException;
 import java.io.Writer;
-import java.util.ArrayList;
-import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashSet;
@@ -11,8 +9,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import javax.annotation.processing.AbstractProcessor;
+import javax.annotation.processing.Messager;
 import javax.annotation.processing.ProcessingEnvironment;
-import javax.annotation.processing.Processor;
 import javax.annotation.processing.RoundEnvironment;
 import javax.lang.model.SourceVersion;
 import javax.lang.model.element.AnnotationMirror;
@@ -27,6 +25,9 @@ import javax.lang.model.type.MirroredTypesException;
 import javax.lang.model.type.NoType;
 import javax.lang.model.type.TypeMirror;
 import javax.lang.model.type.TypeVariable;
+import javax.lang.model.util.ElementFilter;
+import javax.lang.model.util.Elements;
+import javax.lang.model.util.SimpleElementVisitor6;
 import javax.lang.model.util.Types;
 import javax.tools.Diagnostic;
 import javax.tools.JavaFileObject;
@@ -36,7 +37,7 @@ import com.bnorm.auto.weave.AutoWeave;
 import com.bnorm.auto.weave.internal.chain.Chain;
 import com.bnorm.auto.weave.internal.chain.MethodChain;
 import com.bnorm.auto.weave.internal.chain.VoidMethodChain;
-import com.google.auto.service.AutoService;
+import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 import com.squareup.javapoet.AnnotationSpec;
 import com.squareup.javapoet.ClassName;
@@ -49,10 +50,14 @@ import com.squareup.javapoet.TypeName;
 import com.squareup.javapoet.TypeSpec;
 import com.squareup.javapoet.TypeVariableName;
 
-@AutoService(Processor.class)
+import static javax.tools.Diagnostic.Kind.ERROR;
+
+//@AutoService(Processor.class)
 public class AutoWeaveProcessor extends AbstractProcessor {
 
-    private Types typeUtils;
+    private Messager messager;
+    private Elements elements;
+    private Types types;
 
     public AutoWeaveProcessor() {
     }
@@ -70,15 +75,17 @@ public class AutoWeaveProcessor extends AbstractProcessor {
     @Override
     public synchronized void init(ProcessingEnvironment processingEnv) {
         super.init(processingEnv);
-        typeUtils = processingEnv.getTypeUtils();
+        messager = processingEnv.getMessager();
+        elements = processingEnv.getElementUtils();
+        types = processingEnv.getTypeUtils();
     }
 
     @Override
     public boolean process(Set<? extends TypeElement> annotations, RoundEnvironment roundEnv) {
-        List<AutoWeaveType> types = getAutoWeaveTypes(roundEnv);
+        ImmutableSet<WeaveDescriptor> weave = weave(roundEnv, advice(roundEnv));
 
-        for (AutoWeaveType autoWeaveType : types) {
-            TypeElement type = autoWeaveType.type();
+        for (WeaveDescriptor weaveDescriptor : weave) {
+            TypeElement type = weaveDescriptor.element();
             String typeName = type.getSimpleName().toString();
             String autoWeaveTypeName = "AutoWeave_" + typeName;
             TypeSpec.Builder typeBuilder = TypeSpec.classBuilder(autoWeaveTypeName);
@@ -91,10 +98,9 @@ public class AutoWeaveProcessor extends AbstractProcessor {
             }
             typeBuilder.addModifiers(Modifier.FINAL);
 
-            for (TypeElement typeElement : autoWeaveType.aspects()) {
-                TypeName aspectType = TypeName.get(typeElement.asType());
-                String aspectTypeName = typeElement.getSimpleName().toString();
-                String aspectFieldName = Names.classToVariable(aspectTypeName);
+            for (AspectDescriptor aspectDescriptor : weaveDescriptor.aspects()) {
+                TypeName aspectType = TypeName.get(aspectDescriptor.element().asType());
+                String aspectFieldName = Names.classToVariable(aspectDescriptor.name());
 
                 // todo(bnorm) should this be static?
                 FieldSpec.Builder aspectBuilder = FieldSpec.builder(aspectType, aspectFieldName);
@@ -103,11 +109,11 @@ public class AutoWeaveProcessor extends AbstractProcessor {
                 typeBuilder.addField(aspectBuilder.build());
             }
 
-            for (AutoWeaveMethod autoWeaveMethod : autoWeaveType.methods()) {
-                ExecutableElement method = autoWeaveMethod.method();
-                String methodName = method.getSimpleName().toString();
+            for (WeaveMethodDescriptor weaveMethodDescriptor : weaveDescriptor.methods()) {
+                ExecutableElement method = weaveMethodDescriptor.element();
+                String methodName = weaveMethodDescriptor.name();
                 String pointcutName = methodName + "Pointcut";
-                List<? extends VariableElement> parameters = autoWeaveMethod.method().getParameters();
+                List<? extends VariableElement> parameters = method.getParameters();
                 StringBuilder methodParameters = new StringBuilder();
                 for (int i = 0, len = parameters.size(); i < len; i++) {
                     if (i != 0) {
@@ -121,6 +127,8 @@ public class AutoWeaveProcessor extends AbstractProcessor {
                 pointcutBuilder.addModifiers(Modifier.PRIVATE, Modifier.STATIC, Modifier.FINAL);
                 pointcutBuilder.initializer("$T.create($S)", Pointcut.class, methodName);
                 typeBuilder.addField(pointcutBuilder.build());
+
+                // todo(bnorm) override all the constructors
 
                 MethodSpec.Builder methodBuilder = overriding(method);
                 methodBuilder.addStatement("$T chain", Chain.class);
@@ -139,13 +147,13 @@ public class AutoWeaveProcessor extends AbstractProcessor {
 
                 methodBuilder.addStatement("chain = $L", superBuilder.build());
 
-                for (AutoAspectMethod aspectMethod : autoWeaveMethod.aspectMethods()) {
-                    String aspectFieldName = aspectMethod.aspect().fieldName();
-                    String aspectMethodName = aspectMethod.name();
+                for (AdviceDescriptor adviceDescriptor : weaveMethodDescriptor.advice()) {
+                    String aspectFieldName = adviceDescriptor.aspect().fieldName();
+                    String aspectMethodName = adviceDescriptor.name();
 
-                    methodBuilder.addStatement("chain = $L", aspectMethod.crosscut()
-                                                                         .getChain(pointcutName, aspectFieldName,
-                                                                                   aspectMethodName));
+                    methodBuilder.addStatement("chain = $L", adviceDescriptor.crosscut()
+                                                                             .getChain(pointcutName, aspectFieldName,
+                                                                                       aspectMethodName));
                 }
 
                 CodeBlock.Builder callBuilder = CodeBlock.builder();
@@ -167,6 +175,7 @@ public class AutoWeaveProcessor extends AbstractProcessor {
                     {
                         callBuilder.addStatement("throw ($T) e", RuntimeException.class);
                     }
+                    // todo(bnorm) add all the other exceptions...
                     callBuilder.nextControlFlow("else");
                     {
                         callBuilder.addStatement("throw new $T($S, e)", AssertionError.class,
@@ -180,12 +189,12 @@ public class AutoWeaveProcessor extends AbstractProcessor {
                 typeBuilder.addMethod(methodBuilder.build());
             }
 
-            PackageElement packageElement = (PackageElement) autoWeaveType.type().getEnclosingElement();
+            PackageElement packageElement = (PackageElement) weaveDescriptor.element().getEnclosingElement();
             JavaFile javaFile = JavaFile.builder(packageElement.getQualifiedName().toString(), typeBuilder.build())
                                         .build();
-            writeSourceFile(javaFile, autoWeaveType.type());
+            writeSourceFile(javaFile, weaveDescriptor.element());
         }
-        return !types.isEmpty();
+        return !weave.isEmpty();
     }
 
     private MethodSpec.Builder overriding(ExecutableElement method) {
@@ -265,101 +274,116 @@ public class AutoWeaveProcessor extends AbstractProcessor {
         }
     }
 
-    private List<AutoWeaveType> getAutoWeaveTypes(RoundEnvironment roundEnv) {
-        for (Element aspect : roundEnv.getElementsAnnotatedWith(AutoAdvice.class)) {
-            // todo(bnorm) should be an executable element
-            // todo(bnorm) first parameter should extend JoinPoint but not be JoinPoint
-            // todo(bnorm) class should have a default constructor
-            AutoAdvice annotation = aspect.getAnnotation(AutoAdvice.class);
-            assert annotation != null;
-        }
-
-
-        // These are the classes to weave
-        Collection<? extends Element> weaved = roundEnv.getElementsAnnotatedWith(AutoWeave.class);
-
-        // These are the classes to instantiate at the top of the class
-        Map<TypeElement, Set<TypeElement>> weavedAspects = new HashMap<>(weaved.size());
-        for (Element element : weaved) {
-            AutoWeave annotation = element.getAnnotation(AutoWeave.class);
-            assert annotation != null;
-            weavedAspects.put((TypeElement) element, new HashSet<TypeElement>());
-        }
-
-        // These are the methods that need to be overriden
-        Map<TypeElement, Map<ExecutableElement, Set<AutoAspectMethod>>> weavedMethods = new HashMap<>(weaved.size());
-        for (Element element : weaved) {
-            AutoWeave annotation = element.getAnnotation(AutoWeave.class);
-            assert annotation != null;
-            weavedMethods.put((TypeElement) element, new HashMap<ExecutableElement, Set<AutoAspectMethod>>());
-        }
-
-
-        for (Element aspect : roundEnv.getElementsAnnotatedWith(AutoAdvice.class)) {
-            AutoAdvice autoAdvice = aspect.getAnnotation(AutoAdvice.class);
-            List<? extends TypeMirror> typeMirrors = valueFrom(autoAdvice);
-            for (TypeMirror targetWeave : typeMirrors) {
-                TypeElement annotation = (TypeElement) processingEnv.getTypeUtils().asElement(targetWeave);
-                for (Element weaveMethod : roundEnv.getElementsAnnotatedWith(annotation)) {
-                    if (!(weaveMethod instanceof ExecutableElement)) {
-                        throw new IllegalArgumentException("Weaving anything but a method is not allowed");
-                    }
-
-                    TypeElement weavedClass = (TypeElement) weaveMethod.getEnclosingElement();
-                    AutoWeave autoWeave = weavedClass.getAnnotation(AutoWeave.class);
-                    if (autoWeave == null) {
-                        // todo(bnorm) this is okay, we just won't weave
-                        continue;
-                    }
-
-                    // make sure containing class has default constructor
-
-                    Map<ExecutableElement, Set<AutoAspectMethod>> methods = weavedMethods.get(weavedClass);
-                    assert methods != null;
-
-                    Set<TypeElement> classes = weavedAspects.get(weavedClass);
-                    assert classes != null;
-
-                    ExecutableElement aspectMethod = (ExecutableElement) aspect;
-                    TypeElement aspectType = (TypeElement) aspectMethod.getEnclosingElement();
-                    classes.add(aspectType);
-
-                    Set<AutoAspectMethod> methodAspects = methods.get(weaveMethod);
-                    if (methodAspects == null) {
-                        methodAspects = new LinkedHashSet<>();
-                        methods.put((ExecutableElement) weaveMethod, methodAspects);
-                    }
-
-
-                    List<? extends VariableElement> parameters = aspectMethod.getParameters();
-                    if (parameters.size() != 1) {
-                        throw new IllegalStateException("AutoAspect can only be on method with a single parameter");
-                    }
-                    String name = parameters.get(0).asType().toString();
-                    CrosscutEnum crosscut = CrosscutEnum.crosscutMap.get(name);
-
-                    AutoAspectType autoAspectType = AutoAspectType.create(aspectType);
-                    AutoAspectMethod autoAspectMethod = AutoAspectMethod.create(aspectMethod, crosscut, autoAspectType);
-                    methodAspects.add(autoAspectMethod);
+    private ImmutableSet<AdviceDescriptor> advice(RoundEnvironment roundEnv) {
+        final Map<TypeElement, Set<ExecutableElement>> adviceMap = new HashMap<>();
+        for (Element advice : roundEnv.getElementsAnnotatedWith(AutoAdvice.class)) {
+            advice.accept(new SimpleElementVisitor6<Object, Object>() {
+                @Override
+                protected Object defaultAction(Element e, Object o) {
+                    throw new AssertionError("AutoAdvice cannot be applied to anything but a method!");
                 }
+
+                @Override
+                public Object visitExecutable(ExecutableElement e, Object o) {
+                    boolean error = false;
+                    // todo(bnorm) first parameter should extend JoinPoint but not be JoinPoint
+                    // todo(bnorm) class should have a default constructor
+
+                    List<? extends VariableElement> parameters = e.getParameters();
+                    if (parameters.size() != 1) {
+                        messager.printMessage(ERROR,
+                                              "AutoAdvice can only be applied to a method with a single JoinPoint parameter.",
+                                              e);
+                        error = true;
+                    }
+
+                    // todo(bnorm) check first (and only) parameter extends but is not JoinPoint
+
+                    if (error) {
+                        return null;
+                    }
+
+                    TypeElement type = (TypeElement) e.getEnclosingElement();
+                    Set<ExecutableElement> aspectAdvice = adviceMap.get(type);
+                    if (aspectAdvice == null) {
+                        adviceMap.put(type, aspectAdvice = new HashSet<>());
+                    }
+                    aspectAdvice.add(e);
+                    return null;
+                }
+            }, null);
+        }
+
+        ImmutableSet.Builder<AdviceDescriptor> adviceDescriptorBuilder = ImmutableSet.builder();
+        for (Map.Entry<TypeElement, Set<ExecutableElement>> entry : adviceMap.entrySet()) {
+            AspectDescriptor aspectDescriptor = AspectDescriptor.create(entry.getKey());
+            for (ExecutableElement element : entry.getValue()) {
+                CrosscutEnum crosscut = getCrosscut(element);
+                AutoAdvice autoAdvice = element.getAnnotation(AutoAdvice.class);
+                ImmutableSet<TypeMirror> targets = ImmutableSet.copyOf(valueFrom(autoAdvice));
+                adviceDescriptorBuilder.add(AdviceDescriptor.create(aspectDescriptor, element, crosscut, targets));
+            }
+        }
+        return adviceDescriptorBuilder.build();
+    }
+
+    private ImmutableSet<WeaveDescriptor> weave(RoundEnvironment roundEnv, ImmutableSet<AdviceDescriptor> advice) {
+        final Map<TypeMirror, AdviceDescriptor> annotationMap = new HashMap<>();
+        for (AdviceDescriptor descriptor : advice) {
+            for (TypeMirror target : descriptor.targets()) {
+                annotationMap.put(target, descriptor);
             }
         }
 
-        List<AutoWeaveType> types = new ArrayList<>(weavedMethods.size());
-        for (Map.Entry<TypeElement, Map<ExecutableElement, Set<AutoAspectMethod>>> typeElement : weavedMethods.entrySet()) {
-            List<AutoWeaveMethod> methods = new ArrayList<>(typeElement.getValue().size());
-            for (Map.Entry<ExecutableElement, Set<AutoAspectMethod>> methodElement : typeElement.getValue()
-                                                                                                .entrySet()) {
-                AutoWeaveMethod method = AutoWeaveMethod.create(methodElement.getKey(),
-                                                                new ArrayList<>(methodElement.getValue()));
-                methods.add(method);
-            }
-            AutoWeaveType type = AutoWeaveType.create(typeElement.getKey(),
-                                                      new ArrayList<>(weavedAspects.get(typeElement.getKey())),
-                                                      methods);
-            types.add(type);
+        final ImmutableSet.Builder<WeaveDescriptor> weaveDescriptorBuilder = ImmutableSet.builder();
+        for (Element weave : roundEnv.getElementsAnnotatedWith(AutoWeave.class)) {
+            weave.accept(new SimpleElementVisitor6<Object, Object>() {
+                @Override
+                protected Object defaultAction(Element e, Object o) {
+                    throw new AssertionError("AutoWeave cannot be applied to anything but a class!");
+                }
+
+                @Override
+                public Object visitType(TypeElement e, Object o) {
+                    // boolean error = false;
+                    // todo(bnorm) make sure it's not an interface or abstract class
+                    ImmutableList.Builder<WeaveMethodDescriptor> weaveMethodDescriptorBuilder = ImmutableList.builder();
+                    process(e, weaveMethodDescriptorBuilder);
+                    weaveDescriptorBuilder.add(WeaveDescriptor.create(e, weaveMethodDescriptorBuilder.build()));
+                    return null;
+                }
+
+                private void process(TypeElement e,
+                                     ImmutableList.Builder<WeaveMethodDescriptor> weaveMethodDescriptorBuilder) {
+                    TypeMirror superclass = e.getSuperclass();
+                    if (!(superclass instanceof NoType)) {
+                        process((TypeElement) types.asElement(superclass), weaveMethodDescriptorBuilder);
+                    }
+
+                    // todo(bnorm) how do override methods fit in?
+                    for (ExecutableElement element : ElementFilter.methodsIn(e.getEnclosedElements())) {
+                        ImmutableList.Builder<AdviceDescriptor> adviceDescriptorBuilder = ImmutableList.builder();
+                        for (AnnotationMirror annotationMirror : element.getAnnotationMirrors()) {
+                            AdviceDescriptor adviceDescriptor = annotationMap.get(annotationMirror.getAnnotationType());
+                            if (adviceDescriptor != null) {
+                                adviceDescriptorBuilder.add(adviceDescriptor);
+                            }
+                        }
+
+                        ImmutableList<AdviceDescriptor> adviceDescriptors = adviceDescriptorBuilder.build();
+                        if (!adviceDescriptors.isEmpty()) {
+                            weaveMethodDescriptorBuilder.add(WeaveMethodDescriptor.create(element, adviceDescriptors));
+                        }
+                    }
+                }
+            }, null);
         }
-        return types;
+        return weaveDescriptorBuilder.build();
+    }
+
+    private CrosscutEnum getCrosscut(ExecutableElement element) {
+        String name = element.getParameters().get(0).asType().toString();
+        return CrosscutEnum.crosscutMap.get(name);
     }
 
     private List<? extends TypeMirror> valueFrom(AutoAdvice autoAdvice) {
