@@ -328,10 +328,14 @@ public class AutoWeaveProcessor extends AbstractProcessor {
     }
 
     private ImmutableSet<WeaveDescriptor> weave(RoundEnvironment roundEnv, ImmutableSet<AdviceDescriptor> advice) {
-        final Map<TypeMirror, AdviceDescriptor> annotationMap = new HashMap<>();
+        final Map<TypeMirror, Set<AdviceDescriptor>> annotationMap = new HashMap<>();
         for (AdviceDescriptor descriptor : advice) {
             for (TypeMirror target : descriptor.targets()) {
-                annotationMap.put(target, descriptor);
+                Set<AdviceDescriptor> adviceDescriptors = annotationMap.get(target);
+                if (adviceDescriptors == null) {
+                    annotationMap.put(target, adviceDescriptors = new HashSet<>());
+                }
+                adviceDescriptors.add(descriptor);
             }
         }
 
@@ -364,9 +368,9 @@ public class AutoWeaveProcessor extends AbstractProcessor {
                     for (ExecutableElement element : ElementFilter.methodsIn(e.getEnclosedElements())) {
                         ImmutableList.Builder<AdviceDescriptor> adviceDescriptorBuilder = ImmutableList.builder();
                         for (AnnotationMirror annotationMirror : element.getAnnotationMirrors()) {
-                            AdviceDescriptor adviceDescriptor = annotationMap.get(annotationMirror.getAnnotationType());
-                            if (adviceDescriptor != null) {
-                                adviceDescriptorBuilder.add(adviceDescriptor);
+                            Set<AdviceDescriptor> adviceDescriptors = annotationMap.get(annotationMirror.getAnnotationType());
+                            if (adviceDescriptors != null) {
+                                adviceDescriptorBuilder.addAll(adviceDescriptors);
                             }
                         }
 
