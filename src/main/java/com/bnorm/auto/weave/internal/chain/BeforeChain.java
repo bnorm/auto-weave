@@ -3,7 +3,7 @@ package com.bnorm.auto.weave.internal.chain;
 import com.bnorm.auto.weave.BeforeJoinPoint;
 import com.bnorm.auto.weave.internal.Pointcut;
 
-public abstract class BeforeChain extends Chain {
+public abstract class BeforeChain extends WrapChain {
     private final BeforeJoinPoint beforeJoinPoint;
 
     public BeforeChain(Chain wrapped, Pointcut pointcut) {

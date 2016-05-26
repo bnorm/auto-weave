@@ -3,7 +3,7 @@ package com.bnorm.auto.weave.internal.chain;
 import com.bnorm.auto.weave.AfterReturningJoinPoint;
 import com.bnorm.auto.weave.internal.Pointcut;
 
-public abstract class AfterReturningChain extends Chain {
+public abstract class AfterReturningChain extends WrapChain {
 
     public AfterReturningChain(Chain wrapped, Pointcut pointcut) {
         super(wrapped, pointcut);

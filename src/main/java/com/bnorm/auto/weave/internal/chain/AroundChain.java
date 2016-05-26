@@ -3,7 +3,7 @@ package com.bnorm.auto.weave.internal.chain;
 import com.bnorm.auto.weave.AroundJoinPoint;
 import com.bnorm.auto.weave.internal.Pointcut;
 
-public abstract class AroundChain extends Chain {
+public abstract class AroundChain extends WrapChain {
 
     private final AroundJoinPoint aroundJoinPoint;
 

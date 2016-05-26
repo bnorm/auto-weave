@@ -3,7 +3,7 @@ package com.bnorm.auto.weave.internal.chain;
 import com.bnorm.auto.weave.AfterThrowingJoinPoint;
 import com.bnorm.auto.weave.internal.Pointcut;
 
-public abstract class AfterThrowingChain extends Chain {
+public abstract class AfterThrowingChain extends WrapChain {
 
     public AfterThrowingChain(Chain wrapped, Pointcut pointcut) {
         super(wrapped, pointcut);
