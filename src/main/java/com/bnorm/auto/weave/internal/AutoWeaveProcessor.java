@@ -2,6 +2,7 @@ package com.bnorm.auto.weave.internal;
 
 import java.io.IOException;
 import java.io.Writer;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashSet;
@@ -11,7 +12,6 @@ import java.util.Set;
 import javax.annotation.processing.AbstractProcessor;
 import javax.annotation.processing.Messager;
 import javax.annotation.processing.ProcessingEnvironment;
-import javax.annotation.processing.Processor;
 import javax.annotation.processing.RoundEnvironment;
 import javax.lang.model.SourceVersion;
 import javax.lang.model.element.AnnotationMirror;
@@ -39,7 +39,6 @@ import com.bnorm.auto.weave.internal.chain.Chain;
 import com.bnorm.auto.weave.internal.chain.MethodChain;
 import com.bnorm.auto.weave.internal.chain.MethodException;
 import com.bnorm.auto.weave.internal.chain.VoidMethodChain;
-import com.google.auto.service.AutoService;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 import com.squareup.javapoet.AnnotationSpec;
@@ -55,7 +54,7 @@ import com.squareup.javapoet.TypeVariableName;
 
 import static javax.tools.Diagnostic.Kind.ERROR;
 
-@AutoService(Processor.class)
+//@AutoService(Processor.class)
 public class AutoWeaveProcessor extends AbstractProcessor {
 
     private Messager messager;
@@ -125,14 +124,14 @@ public class AutoWeaveProcessor extends AbstractProcessor {
                 }
                 boolean returns = !(method.getReturnType() instanceof NoType);
 
-                FieldSpec.Builder pointcutBuilder = FieldSpec.builder(Pointcut.class, pointcutName);
-                pointcutBuilder.addModifiers(Modifier.PRIVATE, Modifier.STATIC, Modifier.FINAL);
-                pointcutBuilder.initializer("$T.create($S)", Pointcut.class, methodName);
-                typeBuilder.addField(pointcutBuilder.build());
+                FieldSpec staticPointcut = StaticPointcut.spec(weaveDescriptor, weaveMethodDescriptor);
+                typeBuilder.addField(staticPointcut);
 
                 // todo(bnorm) override all the constructors
 
                 MethodSpec.Builder methodBuilder = overriding(method);
+                methodBuilder.addStatement("$T pointcut = $T.create(this, $T.asList($L), $L)", Pointcut.class,
+                                           Pointcut.class, Arrays.class, methodParameters, staticPointcut.name);
                 methodBuilder.addStatement("$T chain", Chain.class);
                 methodBuilder.addCode("");
 
@@ -154,7 +153,7 @@ public class AutoWeaveProcessor extends AbstractProcessor {
                     String aspectMethodName = adviceDescriptor.name();
 
                     methodBuilder.addStatement("chain = $L", adviceDescriptor.crosscut()
-                                                                             .getChain(pointcutName, aspectFieldName,
+                                                                             .getChain(aspectFieldName,
                                                                                        aspectMethodName));
                 }
 

@@ -51,7 +51,7 @@ enum CrosscutEnum {
         this.lowerCaseName = Names.classToVariable(name());
     }
 
-    public TypeSpec getChain(String pointcut, String aspectFieldName, String aspectMethodName) {
+    public TypeSpec getChain(String aspectFieldName, String aspectMethodName) {
         MethodSpec.Builder methodBuilder = MethodSpec.methodBuilder(lowerCaseName);
         methodBuilder.addAnnotation(Override.class);
         methodBuilder.addModifiers(Modifier.PUBLIC);
@@ -61,7 +61,7 @@ enum CrosscutEnum {
                                    aspectMethodName);
         MethodSpec around = methodBuilder.build();
 
-        TypeSpec.Builder chainBuilder = TypeSpec.anonymousClassBuilder("chain, " + pointcut);
+        TypeSpec.Builder chainBuilder = TypeSpec.anonymousClassBuilder("chain, pointcut");
         chainBuilder.addSuperinterface(chain);
         chainBuilder.addMethod(around);
         return chainBuilder.build();
