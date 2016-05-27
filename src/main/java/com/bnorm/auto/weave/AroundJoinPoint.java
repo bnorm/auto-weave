@@ -4,7 +4,7 @@ import com.bnorm.auto.weave.internal.JoinPoint;
 import com.bnorm.auto.weave.internal.Pointcut;
 import com.bnorm.auto.weave.internal.chain.Chain;
 
-public class AroundJoinPoint extends JoinPoint {
+public final class AroundJoinPoint extends JoinPoint {
 
     private final Chain callable;
 

@@ -1,8 +1,9 @@
 package com.bnorm.auto.weave;
 
+import com.bnorm.auto.weave.internal.JoinPoint;
 import com.bnorm.auto.weave.internal.Pointcut;
 
-public class AfterThrowingJoinPoint extends AfterJoinPoint {
+public final class AfterThrowingJoinPoint extends JoinPoint {
 
     private final Throwable error;
 
