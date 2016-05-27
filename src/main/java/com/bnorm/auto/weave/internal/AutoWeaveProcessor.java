@@ -12,6 +12,7 @@ import java.util.Set;
 import javax.annotation.processing.AbstractProcessor;
 import javax.annotation.processing.Messager;
 import javax.annotation.processing.ProcessingEnvironment;
+import javax.annotation.processing.Processor;
 import javax.annotation.processing.RoundEnvironment;
 import javax.lang.model.SourceVersion;
 import javax.lang.model.element.AnnotationMirror;
@@ -39,6 +40,7 @@ import com.bnorm.auto.weave.internal.chain.Chain;
 import com.bnorm.auto.weave.internal.chain.MethodChain;
 import com.bnorm.auto.weave.internal.chain.MethodException;
 import com.bnorm.auto.weave.internal.chain.VoidMethodChain;
+import com.google.auto.service.AutoService;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 import com.squareup.javapoet.AnnotationSpec;
@@ -54,7 +56,7 @@ import com.squareup.javapoet.TypeVariableName;
 
 import static javax.tools.Diagnostic.Kind.ERROR;
 
-//@AutoService(Processor.class)
+@AutoService(Processor.class)
 public class AutoWeaveProcessor extends AbstractProcessor {
 
     private Messager messager;

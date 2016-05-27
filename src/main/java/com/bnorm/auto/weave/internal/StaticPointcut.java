@@ -29,9 +29,9 @@ public abstract class StaticPointcut {
             if (i != 0) {
                 argTypes.append(", ");
             }
-            argTypes.append(parameters.get(i).asType());
+            argTypes.append(parameters.get(i).asType()).append(".class");
         }
-        pointcutBuilder.initializer("$T.create($S, $L, $L, $T.asList($L))", StaticPointcut.class, method, targetType, returnType,
+        pointcutBuilder.initializer("$T.create($S, $L, $L, $T.<Class<?>>asList($L))", StaticPointcut.class, method, targetType, returnType,
                                     Arrays.class, argTypes);
         return pointcutBuilder.build();
     }
