@@ -152,9 +152,8 @@ public class AutoWeaveProcessor extends AbstractProcessor {
                     String aspectFieldName = adviceDescriptor.aspect().fieldName();
                     String aspectMethodName = adviceDescriptor.name();
 
-                    methodBuilder.addStatement("chain = $L", adviceDescriptor.crosscut()
-                                                                             .getChain(aspectFieldName,
-                                                                                       aspectMethodName));
+                    methodBuilder.addStatement("chain = $L",
+                                               adviceDescriptor.crosscut().getChain(aspectFieldName, aspectMethodName));
                 }
 
                 CodeBlock.Builder callBuilder = CodeBlock.builder();
@@ -169,20 +168,28 @@ public class AutoWeaveProcessor extends AbstractProcessor {
 
                 callBuilder.nextControlFlow("catch ($T e)", MethodException.class);
                 {
-                    callBuilder.beginControlFlow("if (e.getCause() instanceof $T)", Error.class);
-                    {
-                        callBuilder.addStatement("throw ($T) e.getCause()", Error.class);
+                    boolean begin = true;
+                    List<? extends TypeMirror> thrownTypes = method.getThrownTypes();
+                    for (int i = 0, len = thrownTypes.size(); i < len; i++) {
+                        TypeName thrownTypeName = TypeName.get(thrownTypes.get(i));
+                        beginOrNext(callBuilder, thrownTypeName, begin);
+                        callBuilder.addStatement("throw ($T) e.getCause()", thrownTypeName);
+                        begin = false;
                     }
-                    callBuilder.nextControlFlow("else if (e.getCause() instanceof $T)", RuntimeException.class);
-                    {
+                    if (!thrownTypes.contains(elements.getTypeElement(Error.class.getCanonicalName()).asType())) {
+                        beginOrNext(callBuilder, Error.class, begin);
+                        callBuilder.addStatement("throw ($T) e.getCause()", Error.class);
+                        begin = false;
+                    }
+                    if (!thrownTypes.contains(
+                            elements.getTypeElement(RuntimeException.class.getCanonicalName()).asType())) {
+                        beginOrNext(callBuilder, RuntimeException.class, begin);
                         callBuilder.addStatement("throw ($T) e.getCause()", RuntimeException.class);
                     }
-                    // todo(bnorm) add all the other exceptions...
                     callBuilder.nextControlFlow("else");
-                    {
-                        callBuilder.addStatement("throw new $T($S, e.getCause())", AssertionError.class,
-                                                 "Please contact the library developer");
-                    }
+                    callBuilder.addStatement("throw new $T($S, e.getCause())", AssertionError.class,
+                                             "Please contact the library developer");
+
                     callBuilder.endControlFlow();
                 }
                 callBuilder.endControlFlow();
@@ -195,6 +202,14 @@ public class AutoWeaveProcessor extends AbstractProcessor {
             JavaFile javaFile = JavaFile.builder(packageElement.getQualifiedName().toString(), typeBuilder.build())
                                         .build();
             writeSourceFile(javaFile, weaveDescriptor.element());
+        }
+    }
+
+    private void beginOrNext(CodeBlock.Builder callBuilder, Object thrownTypeName, boolean begin) {
+        if (begin) {
+            callBuilder.beginControlFlow("if (e.getCause() instanceof $T)", thrownTypeName);
+        } else {
+            callBuilder.nextControlFlow("else if (e.getCause() instanceof $T)", thrownTypeName);
         }
     }
 
