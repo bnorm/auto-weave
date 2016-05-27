@@ -1,5 +1,11 @@
 # auto-weave
 
+<!--- All the badges! --->
+[![Travis](https://img.shields.io/travis/bnorm/auto-weave.svg?maxAge=7200&style=flat-square)](https://travis-ci.org/bnorm/auto-weave)
+[![Codecov](https://img.shields.io/codecov/c/github/bnorm/auto-weave.svg?maxAge=7200&style=flat-square)](https://codecov.io/gh/bnorm/auto-weave)
+[![Codacy](https://img.shields.io/codacy/ba632994831044a2b3049a5a17e26c45.svg?maxAge=7200&style=flat-square)](https://www.codacy.com/app/bnorm/auto-weave)
+[![VersionEye](https://img.shields.io/versioneye/d/user/projects/57489055ce8d0e00360be076.svg?maxAge=7200&style=flat-square)](https://www.versioneye.com/user/projects/57489055ce8d0e00360be076)
+
 AutoWeave generates AOP weaved classes using Java Annotation Processing.
 
 It works something like this...
