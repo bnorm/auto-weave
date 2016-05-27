@@ -110,6 +110,16 @@ public class AutoWeaveProcessor extends AbstractProcessor {
                 typeBuilder.addField(aspectBuilder.build());
             }
 
+            List<ExecutableElement> constructors = ElementFilter.constructorsIn(
+                    weaveDescriptor.element().getEnclosedElements());
+            // todo(bnorm) make sure there is at least one non-private constructor
+            for (ExecutableElement constructor : constructors) {
+                if (!constructor.getModifiers().contains(Modifier.PRIVATE)) {
+                    MethodSpec.Builder constructorBuilder = inherit(constructor);
+                    typeBuilder.addMethod(constructorBuilder.build());
+                }
+            }
+
             for (WeaveMethodDescriptor weaveMethodDescriptor : weaveDescriptor.methods()) {
                 ExecutableElement method = weaveMethodDescriptor.element();
                 String methodName = weaveMethodDescriptor.name();
@@ -262,6 +272,62 @@ public class AutoWeaveProcessor extends AbstractProcessor {
         for (TypeMirror thrownType : method.getThrownTypes()) {
             methodBuilder.addException(TypeName.get(thrownType));
         }
+
+        return methodBuilder;
+    }
+
+    private MethodSpec.Builder inherit(ExecutableElement method) {
+        // todo(bnorm) validate that this is in fact a constructor
+
+        Set<Modifier> modifiers = method.getModifiers();
+        if (modifiers.contains(Modifier.PRIVATE) || modifiers.contains(Modifier.FINAL) || modifiers.contains(
+                Modifier.STATIC) || modifiers.contains(Modifier.ABSTRACT)) {
+            throw new IllegalArgumentException("cannot override method with modifiers: " + modifiers);
+        }
+
+        String methodName = method.getSimpleName().toString();
+        MethodSpec.Builder methodBuilder = MethodSpec.methodBuilder(methodName);
+
+        for (AnnotationMirror mirror : method.getAnnotationMirrors()) {
+            AnnotationSpec annotationSpec = AnnotationSpec.get(mirror);
+            methodBuilder.addAnnotation(annotationSpec);
+        }
+
+        modifiers = new LinkedHashSet<>(modifiers);
+        methodBuilder.addModifiers(modifiers);
+
+        for (TypeParameterElement typeParameterElement : method.getTypeParameters()) {
+            TypeVariable var = (TypeVariable) typeParameterElement.asType();
+            methodBuilder.addTypeVariable(TypeVariableName.get(var));
+        }
+
+        List<? extends VariableElement> parameters = method.getParameters();
+        StringBuilder paramStr = new StringBuilder();
+        for (int i = 0, len = parameters.size(); i < len; i++) {
+            final VariableElement parameter = parameters.get(i);
+            TypeName type = TypeName.get(parameter.asType());
+            String name = parameter.getSimpleName().toString();
+            Set<Modifier> parameterModifiers = parameter.getModifiers();
+            ParameterSpec.Builder parameterBuilder = ParameterSpec.builder(type, name)
+                                                                  .addModifiers(parameterModifiers.toArray(
+                                                                          new Modifier[parameterModifiers.size()]));
+            for (AnnotationMirror mirror : parameter.getAnnotationMirrors()) {
+                parameterBuilder.addAnnotation(AnnotationSpec.get(mirror));
+            }
+            methodBuilder.addParameter(parameterBuilder.build());
+
+            if (i != 0) {
+                paramStr.append(", ");
+            }
+            paramStr.append(parameters.get(i).toString());
+        }
+        methodBuilder.varargs(method.isVarArgs());
+
+        for (TypeMirror thrownType : method.getThrownTypes()) {
+            methodBuilder.addException(TypeName.get(thrownType));
+        }
+
+        methodBuilder.addStatement("super($L)", paramStr);
 
         return methodBuilder;
     }
