@@ -11,6 +11,7 @@ import java.util.Set;
 import javax.annotation.processing.AbstractProcessor;
 import javax.annotation.processing.Messager;
 import javax.annotation.processing.ProcessingEnvironment;
+import javax.annotation.processing.Processor;
 import javax.annotation.processing.RoundEnvironment;
 import javax.lang.model.SourceVersion;
 import javax.lang.model.element.AnnotationMirror;
@@ -36,7 +37,9 @@ import com.bnorm.auto.weave.AutoAdvice;
 import com.bnorm.auto.weave.AutoWeave;
 import com.bnorm.auto.weave.internal.chain.Chain;
 import com.bnorm.auto.weave.internal.chain.MethodChain;
+import com.bnorm.auto.weave.internal.chain.MethodException;
 import com.bnorm.auto.weave.internal.chain.VoidMethodChain;
+import com.google.auto.service.AutoService;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 import com.squareup.javapoet.AnnotationSpec;
@@ -52,7 +55,7 @@ import com.squareup.javapoet.TypeVariableName;
 
 import static javax.tools.Diagnostic.Kind.ERROR;
 
-//@AutoService(Processor.class)
+@AutoService(Processor.class)
 public class AutoWeaveProcessor extends AbstractProcessor {
 
     private Messager messager;
@@ -83,7 +86,11 @@ public class AutoWeaveProcessor extends AbstractProcessor {
     @Override
     public boolean process(Set<? extends TypeElement> annotations, RoundEnvironment roundEnv) {
         ImmutableSet<WeaveDescriptor> weave = weave(roundEnv, advice(roundEnv));
+        writeWeave(weave);
+        return !weave.isEmpty();
+    }
 
+    private void writeWeave(ImmutableSet<WeaveDescriptor> weave) {
         for (WeaveDescriptor weaveDescriptor : weave) {
             TypeElement type = weaveDescriptor.element();
             String typeName = type.getSimpleName().toString();
@@ -165,20 +172,21 @@ public class AutoWeaveProcessor extends AbstractProcessor {
                         callBuilder.addStatement("chain.call()");
                     }
                 }
-                callBuilder.nextControlFlow("catch ($T e)", Throwable.class);
+
+                callBuilder.nextControlFlow("catch ($T e)", MethodException.class);
                 {
-                    callBuilder.beginControlFlow("if (e instanceof $T)", Error.class);
+                    callBuilder.beginControlFlow("if (e.getCause() instanceof $T)", Error.class);
                     {
-                        callBuilder.addStatement("throw ($T) e", Error.class);
+                        callBuilder.addStatement("throw ($T) e.getCause()", Error.class);
                     }
-                    callBuilder.nextControlFlow("else if (e instanceof $T)", RuntimeException.class);
+                    callBuilder.nextControlFlow("else if (e.getCause() instanceof $T)", RuntimeException.class);
                     {
-                        callBuilder.addStatement("throw ($T) e", RuntimeException.class);
+                        callBuilder.addStatement("throw ($T) e.getCause()", RuntimeException.class);
                     }
                     // todo(bnorm) add all the other exceptions...
                     callBuilder.nextControlFlow("else");
                     {
-                        callBuilder.addStatement("throw new $T($S, e)", AssertionError.class,
+                        callBuilder.addStatement("throw new $T($S, e.getCause())", AssertionError.class,
                                                  "Please contact the library developer");
                     }
                     callBuilder.endControlFlow();
@@ -194,7 +202,6 @@ public class AutoWeaveProcessor extends AbstractProcessor {
                                         .build();
             writeSourceFile(javaFile, weaveDescriptor.element());
         }
-        return !weave.isEmpty();
     }
 
     private MethodSpec.Builder overriding(ExecutableElement method) {
@@ -368,7 +375,8 @@ public class AutoWeaveProcessor extends AbstractProcessor {
                     for (ExecutableElement element : ElementFilter.methodsIn(e.getEnclosedElements())) {
                         ImmutableList.Builder<AdviceDescriptor> adviceDescriptorBuilder = ImmutableList.builder();
                         for (AnnotationMirror annotationMirror : element.getAnnotationMirrors()) {
-                            Set<AdviceDescriptor> adviceDescriptors = annotationMap.get(annotationMirror.getAnnotationType());
+                            Set<AdviceDescriptor> adviceDescriptors = annotationMap.get(
+                                    annotationMirror.getAnnotationType());
                             if (adviceDescriptors != null) {
                                 adviceDescriptorBuilder.addAll(adviceDescriptors);
                             }

@@ -10,7 +10,7 @@ public abstract class AfterReturningChain extends WrapChain {
     }
 
     @Override
-    public final Object call() throws Throwable {
+    public final Object call() {
         Object result = super.call();
         AfterReturningJoinPoint afterThrowingJoinPoint = new AfterReturningJoinPoint(pointcut, result);
         afterReturning(afterThrowingJoinPoint);

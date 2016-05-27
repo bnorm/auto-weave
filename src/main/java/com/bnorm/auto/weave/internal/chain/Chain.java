@@ -5,5 +5,5 @@ public abstract class Chain {
     protected Chain() {
     }
 
-    public abstract Object call() throws Throwable;
+    public abstract Object call();
 }

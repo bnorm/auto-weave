@@ -10,7 +10,7 @@ public abstract class AfterThrowingChain extends WrapChain {
     }
 
     @Override
-    public final Object call() throws Throwable {
+    public final Object call() {
         try {
             return super.call();
         } catch (Throwable error) {

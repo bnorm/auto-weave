@@ -2,17 +2,17 @@ package com.bnorm.auto.weave.internal.chain;
 
 import com.bnorm.auto.weave.internal.Pointcut;
 
-public abstract class WrapChain extends Chain {
+abstract class WrapChain extends Chain {
 
     private final Chain wrapped;
     protected final Pointcut pointcut;
 
-    protected WrapChain(Chain wrapped, Pointcut pointcut) {
+    WrapChain(Chain wrapped, Pointcut pointcut) {
         this.wrapped = wrapped;
         this.pointcut = pointcut;
     }
 
-    public Object call() throws Throwable {
+    public Object call() {
         return wrapped.call();
     }
 }

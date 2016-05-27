@@ -12,7 +12,7 @@ public abstract class BeforeChain extends WrapChain {
     }
 
     @Override
-    public final Object call() throws Throwable {
+    public final Object call() {
         before(beforeJoinPoint);
         return super.call();
     }

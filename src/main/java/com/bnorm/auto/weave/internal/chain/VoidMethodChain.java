@@ -2,11 +2,15 @@ package com.bnorm.auto.weave.internal.chain;
 
 public abstract class VoidMethodChain extends Chain {
 
-    public abstract void method() throws Throwable;
+    protected abstract void method() throws Throwable;
 
     @Override
-    public Object call() throws Throwable {
-        method();
-        return null;
+    public final Object call() {
+        try {
+            method();
+            return null;
+        } catch (Throwable error) {
+            throw new MethodException(error);
+        }
     }
 }

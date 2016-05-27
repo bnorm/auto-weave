@@ -55,9 +55,6 @@ enum CrosscutEnum {
         MethodSpec.Builder methodBuilder = MethodSpec.methodBuilder(lowerCaseName);
         methodBuilder.addAnnotation(Override.class);
         methodBuilder.addModifiers(Modifier.PUBLIC);
-        if (returnType != void.class) {
-            methodBuilder.addException(Throwable.class);
-        }
         methodBuilder.returns(returnType);
         methodBuilder.addParameter(joinPoint, "joinPoint");
         methodBuilder.addStatement((returnType == void.class ? "" : "return ") + "$N.$N(joinPoint)", aspectFieldName,

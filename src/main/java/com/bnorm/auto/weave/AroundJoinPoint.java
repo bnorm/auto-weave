@@ -13,7 +13,7 @@ public class AroundJoinPoint extends JoinPoint {
         this.callable = callable;
     }
 
-    public Object proceed() throws Throwable {
+    public Object proceed() {
         return callable.call();
     }
 }
