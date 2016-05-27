@@ -13,8 +13,8 @@ public abstract class AfterThrowingChain extends WrapChain {
     public final Object call() {
         try {
             return super.call();
-        } catch (Throwable error) {
-            AfterThrowingJoinPoint afterThrowingJoinPoint = new AfterThrowingJoinPoint(pointcut, error);
+        } catch (MethodException error) {
+            AfterThrowingJoinPoint afterThrowingJoinPoint = new AfterThrowingJoinPoint(pointcut, error.getCause());
             afterThrowing(afterThrowingJoinPoint);
             throw error;
         }
