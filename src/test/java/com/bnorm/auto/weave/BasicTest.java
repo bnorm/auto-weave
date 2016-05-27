@@ -62,7 +62,7 @@ public class BasicTest extends TestCase {
                 "import java.lang.String;",
                 "import java.lang.Throwable;",
                 "",
-                "public final class AutoWeave_Target extends Target {",
+                "final class AutoWeave_Target extends Target {",
                 "",
                 "    private static final Pointcut methodPointcut = Pointcut.create(\"method\");",
                 "",

@@ -98,11 +98,6 @@ public class AutoWeaveProcessor extends AbstractProcessor {
             TypeSpec.Builder typeBuilder = TypeSpec.classBuilder(autoWeaveTypeName);
             typeBuilder.addOriginatingElement(type);
             typeBuilder.superclass(TypeName.get(type.asType()));
-            for (Modifier modifier : type.getModifiers()) {
-                if (modifier != Modifier.ABSTRACT) {
-                    typeBuilder.addModifiers(modifier);
-                }
-            }
             typeBuilder.addModifiers(Modifier.FINAL);
 
             for (AspectDescriptor aspectDescriptor : weaveDescriptor.aspects()) {
