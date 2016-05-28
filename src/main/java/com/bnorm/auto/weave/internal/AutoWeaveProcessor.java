@@ -125,7 +125,6 @@ public class AutoWeaveProcessor extends AbstractProcessor {
             for (WeaveMethodDescriptor weaveMethodDescriptor : weaveDescriptor.methods()) {
                 ExecutableElement method = weaveMethodDescriptor.element();
                 String methodName = weaveMethodDescriptor.name();
-                String pointcutName = methodName + "Pointcut";
                 List<? extends VariableElement> parameters = method.getParameters();
                 StringBuilder methodParameters = new StringBuilder();
                 for (int i = 0, len = parameters.size(); i < len; i++) {
@@ -139,10 +138,8 @@ public class AutoWeaveProcessor extends AbstractProcessor {
                 FieldSpec staticPointcut = StaticPointcut.spec(weaveDescriptor, weaveMethodDescriptor);
                 typeBuilder.addField(staticPointcut);
 
-                // todo(bnorm) override all the constructors
-
                 MethodSpec.Builder methodBuilder = overriding(method);
-                methodBuilder.addStatement("$T pointcut = $T.create(this, $T.asList($L), $L)", Pointcut.class,
+                methodBuilder.addStatement("$T pointcut = $T.create(this, $T.<Object>asList($L), $L)", Pointcut.class,
                                            Pointcut.class, Arrays.class, methodParameters, staticPointcut.name);
                 methodBuilder.addStatement("$T chain", Chain.class);
                 methodBuilder.addCode("");

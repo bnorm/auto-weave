@@ -77,7 +77,7 @@ public class BasicTest extends TestCase {
                 "    @Override",
                 "    @Trace",
                 "    public String method() {",
-                "        Pointcut pointcut = Pointcut.create(this, Arrays.asList(), methodPointcut);",
+                "        Pointcut pointcut = Pointcut.create(this, Arrays.<Object>asList(), methodPointcut);",
                 "        Chain chain;",
                 "        chain = new MethodChain() {",
                 "            @Override",
