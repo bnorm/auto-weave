@@ -49,6 +49,7 @@ import com.squareup.javapoet.CodeBlock;
 import com.squareup.javapoet.FieldSpec;
 import com.squareup.javapoet.JavaFile;
 import com.squareup.javapoet.MethodSpec;
+import com.squareup.javapoet.NameAllocator;
 import com.squareup.javapoet.ParameterSpec;
 import com.squareup.javapoet.TypeName;
 import com.squareup.javapoet.TypeSpec;
@@ -92,6 +93,8 @@ public class AutoWeaveProcessor extends AbstractProcessor {
     }
 
     private void writeWeave(ImmutableSet<WeaveDescriptor> weave) {
+        NameAllocator nameAllocator = new NameAllocator();
+
         for (WeaveDescriptor weaveDescriptor : weave) {
             TypeElement type = weaveDescriptor.element();
             String autoWeaveTypeName = classNameOf(type);
@@ -134,7 +137,7 @@ public class AutoWeaveProcessor extends AbstractProcessor {
                 }
                 boolean returns = !(method.getReturnType() instanceof NoType);
 
-                FieldSpec staticPointcut = StaticPointcut.spec(weaveDescriptor, weaveMethodDescriptor);
+                FieldSpec staticPointcut = StaticPointcut.spec(nameAllocator, types, weaveDescriptor, weaveMethodDescriptor);
                 typeBuilder.addField(staticPointcut);
 
                 MethodSpec.Builder methodBuilder = overriding(method);
@@ -145,7 +148,7 @@ public class AutoWeaveProcessor extends AbstractProcessor {
 
                 TypeSpec.Builder superBuilder = TypeSpec.anonymousClassBuilder("");
                 superBuilder.addSuperinterface(returns ? MethodChain.class : VoidMethodChain.class);
-                superBuilder.addMethod(MethodSpec.methodBuilder(methodName)
+                superBuilder.addMethod(MethodSpec.methodBuilder("method")
                                                  .addAnnotation(Override.class)
                                                  .addModifiers(Modifier.PUBLIC)
                                                  .addException(Throwable.class)

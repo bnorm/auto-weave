@@ -66,7 +66,7 @@ public class BasicTest extends TestCase {
                 "",
                 "final class AutoWeave_Target extends Target {",
                 "",
-                "    private static final StaticPointcut methodPointcut = StaticPointcut.create(\"method\", Target.class, java.lang.String.class, Arrays.<Class<?>>asList());",
+                "    private static final StaticPointcut methodPointcut = StaticPointcut.create(\"method\", Target.class, String.class, Arrays.<Class<?>>asList());",
                 "",
                 "    private final TraceAspect traceAspect = new TraceAspect();",
                 "",
