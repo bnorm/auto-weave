@@ -17,7 +17,7 @@
     <dependency>
       <groupId>com.bnorm.auto.weave</groupId>
       <artifactId>auto-weave</artifactId>
-      <version>0.1-SNAPSHOT</version>
+      <version>@auto.version@</version>
     </dependency>
   </dependencies>
 

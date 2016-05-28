@@ -332,10 +332,32 @@ public class AutoWeaveProcessor extends AbstractProcessor {
     }
 
 
+    private String fqClassNameOf(TypeElement type) {
+        String pkg = packageNameOf(type);
+        String dot = pkg.isEmpty() ? "" : ".";
+        return pkg + dot + classNameOf(type);
+    }
+
+
+    private String classNameOf(TypeElement type) {
+        return "AutoValue_" + type.getSimpleName().toString();
+    }
+
+    static String packageNameOf(TypeElement type) {
+        while (true) {
+            Element enclosing = type.getEnclosingElement();
+            if (enclosing instanceof PackageElement) {
+                return ((PackageElement) enclosing).getQualifiedName().toString();
+            }
+            type = (TypeElement) enclosing;
+        }
+    }
+
+
     private void writeSourceFile(JavaFile javaFile, TypeElement originatingType) {
         try {
             JavaFileObject sourceFile = processingEnv.getFiler()
-                                                     .createSourceFile(javaFile.typeSpec.name, originatingType);
+                                                     .createSourceFile(fqClassNameOf(originatingType), originatingType);
             Writer writer = sourceFile.openWriter();
             try {
                 javaFile.writeTo(writer);
