@@ -94,8 +94,7 @@ public class AutoWeaveProcessor extends AbstractProcessor {
     private void writeWeave(ImmutableSet<WeaveDescriptor> weave) {
         for (WeaveDescriptor weaveDescriptor : weave) {
             TypeElement type = weaveDescriptor.element();
-            String typeName = type.getSimpleName().toString();
-            String autoWeaveTypeName = "AutoWeave_" + typeName;
+            String autoWeaveTypeName = classNameOf(type);
             TypeSpec.Builder typeBuilder = TypeSpec.classBuilder(autoWeaveTypeName);
             typeBuilder.addOriginatingElement(type);
             typeBuilder.superclass(TypeName.get(type.asType()));
@@ -340,7 +339,7 @@ public class AutoWeaveProcessor extends AbstractProcessor {
 
 
     private String classNameOf(TypeElement type) {
-        return "AutoValue_" + type.getSimpleName().toString();
+        return "AutoWeave_" + type.getSimpleName().toString();
     }
 
     static String packageNameOf(TypeElement type) {
