@@ -9,13 +9,13 @@
 
 AutoWeave generates AOP weaved classes using Java Annotation Processing.
 
-Now available on Maven Central
+Now available on Maven Central, see maven central badge for the latest version.
 
 ```xml
 <dependency>
     <groupId>com.bnorm.auto.weave</groupId>
     <artifactId>auto-weave</artifactId>
-    <version>0.1</version>
+    <version>${auto-weave.version}</version>
 </dependency>
 ```
 
