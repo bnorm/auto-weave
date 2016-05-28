@@ -4,7 +4,7 @@
 
   <groupId>com.bnorm.auto.weave</groupId>
   <artifactId>auto-weave</artifactId>
-  <version>0.1.2-SNAPSHOT</version>
+  <version>0.1.2</version>
   <name>AutoWeave</name>
   <description>AutoWeave - Auto generate AOP code</description>
   <url>https://github.com/bnorm/auto-weave</url>
