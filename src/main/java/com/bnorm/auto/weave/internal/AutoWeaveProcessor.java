@@ -2,6 +2,7 @@ package com.bnorm.auto.weave.internal;
 
 import java.io.IOException;
 import java.io.Writer;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -41,8 +42,6 @@ import com.bnorm.auto.weave.internal.chain.MethodChain;
 import com.bnorm.auto.weave.internal.chain.MethodException;
 import com.bnorm.auto.weave.internal.chain.VoidMethodChain;
 import com.google.auto.service.AutoService;
-import com.google.common.collect.ImmutableList;
-import com.google.common.collect.ImmutableSet;
 import com.squareup.javapoet.AnnotationSpec;
 import com.squareup.javapoet.ClassName;
 import com.squareup.javapoet.CodeBlock;
@@ -60,16 +59,16 @@ import static javax.tools.Diagnostic.Kind.ERROR;
 @AutoService(Processor.class)
 public class AutoWeaveProcessor extends AbstractProcessor {
 
+    private static final HashSet<String> SUPPORTED = new HashSet<>(
+            Arrays.asList(AutoWeave.class.getName(), AutoAdvice.class.getName()));
+
     private Messager messager;
     private Elements elements;
     private Types types;
 
-    public AutoWeaveProcessor() {
-    }
-
     @Override
     public Set<String> getSupportedAnnotationTypes() {
-        return ImmutableSet.of(AutoWeave.class.getName(), AutoAdvice.class.getName());
+        return SUPPORTED;
     }
 
     @Override
@@ -87,12 +86,12 @@ public class AutoWeaveProcessor extends AbstractProcessor {
 
     @Override
     public boolean process(Set<? extends TypeElement> annotations, RoundEnvironment roundEnv) {
-        ImmutableSet<WeaveDescriptor> weave = weave(roundEnv, advice(roundEnv));
+        Set<WeaveDescriptor> weave = weave(roundEnv, advice(roundEnv));
         writeWeave(weave);
         return !weave.isEmpty();
     }
 
-    private void writeWeave(ImmutableSet<WeaveDescriptor> weave) {
+    private void writeWeave(Set<WeaveDescriptor> weave) {
         NameAllocator nameAllocator = new NameAllocator();
 
         for (WeaveDescriptor weaveDescriptor : weave) {
@@ -137,7 +136,8 @@ public class AutoWeaveProcessor extends AbstractProcessor {
                 }
                 boolean returns = !(method.getReturnType() instanceof NoType);
 
-                FieldSpec staticPointcut = StaticPointcut.spec(nameAllocator, types, weaveDescriptor, weaveMethodDescriptor);
+                FieldSpec staticPointcut = StaticPointcut.spec(nameAllocator, types, weaveDescriptor,
+                                                               weaveMethodDescriptor);
                 typeBuilder.addField(staticPointcut);
 
                 MethodSpec.Builder methodBuilder = overriding(method);
@@ -379,7 +379,7 @@ public class AutoWeaveProcessor extends AbstractProcessor {
         }
     }
 
-    private ImmutableSet<AdviceDescriptor> advice(RoundEnvironment roundEnv) {
+    private Set<AdviceDescriptor> advice(RoundEnvironment roundEnv) {
         final Map<TypeElement, Set<ExecutableElement>> adviceMap = new HashMap<>();
         for (Element advice : roundEnv.getElementsAnnotatedWith(AutoAdvice.class)) {
             advice.accept(new SimpleElementVisitor6<Object, Object>() {
@@ -419,20 +419,20 @@ public class AutoWeaveProcessor extends AbstractProcessor {
             }, null);
         }
 
-        ImmutableSet.Builder<AdviceDescriptor> adviceDescriptorBuilder = ImmutableSet.builder();
+        Set<AdviceDescriptor> adviceDescriptors = new HashSet<>();
         for (Map.Entry<TypeElement, Set<ExecutableElement>> entry : adviceMap.entrySet()) {
             AspectDescriptor aspectDescriptor = AspectDescriptor.create(entry.getKey());
             for (ExecutableElement element : entry.getValue()) {
                 CrosscutEnum crosscut = getCrosscut(element);
                 AutoAdvice autoAdvice = element.getAnnotation(AutoAdvice.class);
-                ImmutableSet<TypeMirror> targets = ImmutableSet.copyOf(valueFrom(autoAdvice));
-                adviceDescriptorBuilder.add(AdviceDescriptor.create(aspectDescriptor, element, crosscut, targets));
+                Set<TypeMirror> targets = new HashSet<>(valueFrom(autoAdvice));
+                adviceDescriptors.add(AdviceDescriptor.create(aspectDescriptor, element, crosscut, targets));
             }
         }
-        return adviceDescriptorBuilder.build();
+        return adviceDescriptors;
     }
 
-    private ImmutableSet<WeaveDescriptor> weave(RoundEnvironment roundEnv, ImmutableSet<AdviceDescriptor> advice) {
+    private Set<WeaveDescriptor> weave(RoundEnvironment roundEnv, Set<AdviceDescriptor> advice) {
         final Map<TypeMirror, Set<AdviceDescriptor>> annotationMap = new HashMap<>();
         for (AdviceDescriptor descriptor : advice) {
             for (TypeMirror target : descriptor.targets()) {
@@ -444,7 +444,7 @@ public class AutoWeaveProcessor extends AbstractProcessor {
             }
         }
 
-        final ImmutableSet.Builder<WeaveDescriptor> weaveDescriptorBuilder = ImmutableSet.builder();
+        final Set<WeaveDescriptor> weaveDescriptorBuilder = new HashSet<>();
         for (Element weave : roundEnv.getElementsAnnotatedWith(AutoWeave.class)) {
             weave.accept(new SimpleElementVisitor6<Object, Object>() {
                 @Override
@@ -456,14 +456,13 @@ public class AutoWeaveProcessor extends AbstractProcessor {
                 public Object visitType(TypeElement e, Object o) {
                     // boolean error = false;
                     // todo(bnorm) make sure it's not an interface or abstract class
-                    ImmutableList.Builder<WeaveMethodDescriptor> weaveMethodDescriptorBuilder = ImmutableList.builder();
+                    List<WeaveMethodDescriptor> weaveMethodDescriptorBuilder = new ArrayList<>();
                     process(e, weaveMethodDescriptorBuilder);
-                    weaveDescriptorBuilder.add(WeaveDescriptor.create(e, weaveMethodDescriptorBuilder.build()));
+                    weaveDescriptorBuilder.add(WeaveDescriptor.create(e, weaveMethodDescriptorBuilder));
                     return null;
                 }
 
-                private void process(TypeElement e,
-                                     ImmutableList.Builder<WeaveMethodDescriptor> weaveMethodDescriptorBuilder) {
+                private void process(TypeElement e, List<WeaveMethodDescriptor> weaveMethodDescriptorBuilder) {
                     TypeMirror superclass = e.getSuperclass();
                     if (!(superclass instanceof NoType)) {
                         process((TypeElement) types.asElement(superclass), weaveMethodDescriptorBuilder);
@@ -471,16 +470,14 @@ public class AutoWeaveProcessor extends AbstractProcessor {
 
                     // todo(bnorm) how do override methods fit in?
                     for (ExecutableElement element : ElementFilter.methodsIn(e.getEnclosedElements())) {
-                        ImmutableList.Builder<AdviceDescriptor> adviceDescriptorBuilder = ImmutableList.builder();
+                        List<AdviceDescriptor> adviceDescriptors = new ArrayList<>();
                         for (AnnotationMirror annotationMirror : element.getAnnotationMirrors()) {
-                            Set<AdviceDescriptor> adviceDescriptors = annotationMap.get(
-                                    annotationMirror.getAnnotationType());
-                            if (adviceDescriptors != null) {
-                                adviceDescriptorBuilder.addAll(adviceDescriptors);
+                            Set<AdviceDescriptor> descriptors = annotationMap.get(annotationMirror.getAnnotationType());
+                            if (descriptors != null) {
+                                adviceDescriptors.addAll(descriptors);
                             }
                         }
 
-                        ImmutableList<AdviceDescriptor> adviceDescriptors = adviceDescriptorBuilder.build();
                         if (!adviceDescriptors.isEmpty()) {
                             weaveMethodDescriptorBuilder.add(WeaveMethodDescriptor.create(element, adviceDescriptors));
                         }
@@ -488,7 +485,7 @@ public class AutoWeaveProcessor extends AbstractProcessor {
                 }
             }, null);
         }
-        return weaveDescriptorBuilder.build();
+        return weaveDescriptorBuilder;
     }
 
     private CrosscutEnum getCrosscut(ExecutableElement element) {

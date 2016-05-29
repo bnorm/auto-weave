@@ -1,34 +1,28 @@
 package com.bnorm.auto.weave.internal;
 
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
 import javax.lang.model.element.TypeElement;
 
 import com.google.auto.value.AutoValue;
-import com.google.common.base.Function;
-import com.google.common.collect.FluentIterable;
-import com.google.common.collect.ImmutableList;
-import com.google.common.collect.ImmutableSet;
 
 @AutoValue
 abstract class WeaveDescriptor {
 
-    static WeaveDescriptor create(TypeElement element, ImmutableList<WeaveMethodDescriptor> methods) {
-        return new AutoValue_WeaveDescriptor(element, methods);
+    static WeaveDescriptor create(TypeElement element, List<WeaveMethodDescriptor> methods) {
+        Set<AspectDescriptor> aspects = new HashSet<>();
+        for (WeaveMethodDescriptor method : methods) {
+            aspects.addAll(method.aspects());
+        }
+        return new AutoValue_WeaveDescriptor(element, methods, aspects);
     }
 
     abstract TypeElement element();
 
-    abstract ImmutableList<WeaveMethodDescriptor> methods();
+    abstract List<WeaveMethodDescriptor> methods();
 
-    ImmutableSet<AspectDescriptor> aspects() {
-        return FluentIterable.from(methods())
-                             .transformAndConcat(new Function<WeaveMethodDescriptor, ImmutableSet<AspectDescriptor>>() {
-                                 @Override
-                                 public ImmutableSet<AspectDescriptor> apply(WeaveMethodDescriptor input) {
-                                     return input.aspects();
-                                 }
-                             })
-                             .toSet();
-    }
+    abstract Set<AspectDescriptor> aspects();
 
     String name() {
         return element().getSimpleName().toString();
