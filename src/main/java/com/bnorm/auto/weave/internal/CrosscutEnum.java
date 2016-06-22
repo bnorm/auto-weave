@@ -10,21 +10,22 @@ import com.bnorm.auto.weave.AfterReturningJoinPoint;
 import com.bnorm.auto.weave.AfterThrowingJoinPoint;
 import com.bnorm.auto.weave.AroundJoinPoint;
 import com.bnorm.auto.weave.BeforeJoinPoint;
-import com.bnorm.auto.weave.internal.chain.AfterChain;
-import com.bnorm.auto.weave.internal.chain.AfterReturningChain;
-import com.bnorm.auto.weave.internal.chain.AfterThrowingChain;
-import com.bnorm.auto.weave.internal.chain.AroundChain;
-import com.bnorm.auto.weave.internal.chain.BeforeChain;
-import com.bnorm.auto.weave.internal.chain.Chain;
+import com.bnorm.auto.weave.JoinPoint;
+import com.bnorm.auto.weave.internal.advice.Advice;
+import com.bnorm.auto.weave.internal.advice.AfterAdvice;
+import com.bnorm.auto.weave.internal.advice.AfterReturningAdvice;
+import com.bnorm.auto.weave.internal.advice.AfterThrowingAdvice;
+import com.bnorm.auto.weave.internal.advice.AroundAdvice;
+import com.bnorm.auto.weave.internal.advice.BeforeAdvice;
 import com.squareup.javapoet.MethodSpec;
 import com.squareup.javapoet.TypeSpec;
 
 enum CrosscutEnum {
-    Before(BeforeJoinPoint.class, BeforeChain.class, void.class),
-    After(AfterJoinPoint.class, AfterChain.class, void.class),
-    AfterReturning(AfterReturningJoinPoint.class, AfterReturningChain.class, void.class),
-    AfterThrowing(AfterThrowingJoinPoint.class, AfterThrowingChain.class, void.class),
-    Around(AroundJoinPoint.class, AroundChain.class, Object.class),
+    Before(BeforeJoinPoint.class, BeforeAdvice.class, void.class),
+    After(AfterJoinPoint.class, AfterAdvice.class, void.class),
+    AfterReturning(AfterReturningJoinPoint.class, AfterReturningAdvice.class, void.class),
+    AfterThrowing(AfterThrowingJoinPoint.class, AfterThrowingAdvice.class, void.class),
+    Around(AroundJoinPoint.class, AroundAdvice.class, Object.class),
 
     // End of enumeration
     ;
@@ -40,18 +41,18 @@ enum CrosscutEnum {
     }
 
     protected final Class<? extends JoinPoint> joinPoint;
-    protected final Class<? extends Chain> chain;
+    protected final Class<? extends Advice> chain;
     protected final Class<?> returnType;
     protected final String lowerCaseName;
 
-    CrosscutEnum(Class<? extends JoinPoint> joinPoint, Class<? extends Chain> chain, Class<?> returnType) {
+    CrosscutEnum(Class<? extends JoinPoint> joinPoint, Class<? extends Advice> chain, Class<?> returnType) {
         this.joinPoint = joinPoint;
         this.chain = chain;
         this.returnType = returnType;
         this.lowerCaseName = Names.classToVariable(name());
     }
 
-    public TypeSpec getChain(String aspectFieldName, String aspectMethodName) {
+    public TypeSpec getAdvice(String aspectFieldName, String aspectMethodName) {
         MethodSpec.Builder methodBuilder = MethodSpec.methodBuilder(lowerCaseName);
         methodBuilder.addAnnotation(Override.class);
         methodBuilder.addModifiers(Modifier.PUBLIC);
@@ -61,7 +62,7 @@ enum CrosscutEnum {
                                    aspectMethodName);
         MethodSpec around = methodBuilder.build();
 
-        TypeSpec.Builder chainBuilder = TypeSpec.anonymousClassBuilder("chain, pointcut");
+        TypeSpec.Builder chainBuilder = TypeSpec.anonymousClassBuilder("");
         chainBuilder.addSuperinterface(chain);
         chainBuilder.addMethod(around);
         return chainBuilder.build();

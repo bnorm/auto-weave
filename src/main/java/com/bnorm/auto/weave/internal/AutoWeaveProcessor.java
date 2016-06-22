@@ -4,8 +4,7 @@ import java.io.IOException;
 import java.io.Writer;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.HashMap;
-import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -37,10 +36,9 @@ import javax.tools.JavaFileObject;
 
 import com.bnorm.auto.weave.AutoAdvice;
 import com.bnorm.auto.weave.AutoWeave;
-import com.bnorm.auto.weave.internal.chain.Chain;
-import com.bnorm.auto.weave.internal.chain.MethodChain;
-import com.bnorm.auto.weave.internal.chain.MethodException;
-import com.bnorm.auto.weave.internal.chain.VoidMethodChain;
+import com.bnorm.auto.weave.internal.advice.Advice;
+import com.bnorm.auto.weave.internal.advice.Chain;
+import com.bnorm.auto.weave.internal.advice.MethodException;
 import com.google.auto.service.AutoService;
 import com.squareup.javapoet.AnnotationSpec;
 import com.squareup.javapoet.ClassName;
@@ -59,7 +57,7 @@ import static javax.tools.Diagnostic.Kind.ERROR;
 @AutoService(Processor.class)
 public class AutoWeaveProcessor extends AbstractProcessor {
 
-    private static final HashSet<String> SUPPORTED = new HashSet<>(
+    private static final LinkedHashSet<String> SUPPORTED = new LinkedHashSet<>(
             Arrays.asList(AutoWeave.class.getName(), AutoAdvice.class.getName()));
 
     private Messager messager;
@@ -140,40 +138,68 @@ public class AutoWeaveProcessor extends AbstractProcessor {
                                                                weaveMethodDescriptor);
                 typeBuilder.addField(staticPointcut);
 
-                MethodSpec.Builder methodBuilder = overriding(method);
-                methodBuilder.addStatement("$T pointcut = $T.create(this, $T.<Object>asList($L), $L)", Pointcut.class,
-                                           Pointcut.class, Arrays.class, methodParameters, staticPointcut.name);
-                methodBuilder.addStatement("$T chain", Chain.class);
-                methodBuilder.addCode("");
+                // ****************************************************************************
+                // todo(bnorm) method advice arrays
 
-                TypeSpec.Builder superBuilder = TypeSpec.anonymousClassBuilder("");
-                superBuilder.addSuperinterface(returns ? MethodChain.class : VoidMethodChain.class);
-                superBuilder.addMethod(MethodSpec.methodBuilder("method")
-                                                 .addAnnotation(Override.class)
-                                                 .addModifiers(Modifier.PUBLIC)
-                                                 .addException(Throwable.class)
-                                                 .returns(returns ? Object.class : void.class)
-                                                 .addStatement((returns ? "return " : "") + "$N.super.$N($L)",
-                                                               autoWeaveTypeName, methodName, methodParameters)
-                                                 .build());
+                List<AdviceDescriptor> adviceDescriptors = weaveMethodDescriptor.advice();
+                String adviceArrayName = nameAllocator.newName(methodName + "Advice");
+                FieldSpec.Builder methodAdviceBuilder = FieldSpec.builder(Advice[].class, adviceArrayName);
+                methodAdviceBuilder.addModifiers(Modifier.PRIVATE, Modifier.FINAL);
 
-                methodBuilder.addStatement("chain = $L", superBuilder.build());
+                StringBuilder format = new StringBuilder();
+                Object[] args = new Object[1 + adviceDescriptors.size()];
+                args[0] = Advice.class;
 
-                for (AdviceDescriptor adviceDescriptor : weaveMethodDescriptor.advice()) {
+                format.append("new $T[] {");
+                for (int i = 0, len = adviceDescriptors.size(); i < len; i++) {
+                    if (i != 0) {
+                        format.append(", ");
+                    }
+                    format.append('\n').append("$L");
+
+                    AdviceDescriptor adviceDescriptor = adviceDescriptors.get(i);
                     String aspectFieldName = adviceDescriptor.aspect().fieldName();
                     String aspectMethodName = adviceDescriptor.name();
-
-                    methodBuilder.addStatement("chain = $L",
-                                               adviceDescriptor.crosscut().getChain(aspectFieldName, aspectMethodName));
+                    args[i + 1] = adviceDescriptor.crosscut().getAdvice(aspectFieldName, aspectMethodName);
                 }
+                format.append('\n').append("}");
 
+                methodAdviceBuilder.initializer(format.toString(), args);
+                FieldSpec adviceArray = methodAdviceBuilder.build();
+                typeBuilder.addField(adviceArray);
+
+                // todo(bnorm) method advice arrays
+                // ****************************************************************************
+
+                MethodSpec.Builder methodBuilder = overriding(method);
                 CodeBlock.Builder callBuilder = CodeBlock.builder();
                 callBuilder.beginControlFlow("try");
                 {
+                    TypeSpec.Builder superBuilder = TypeSpec.anonymousClassBuilder(
+                            "$L, this, $L, $T.<Object>asList($L)", adviceArrayName, staticPointcut.name, Arrays.class,
+                            methodParameters);
+                    superBuilder.addSuperinterface(Chain.class);
+                    MethodSpec.Builder superMethodBuilder = MethodSpec.methodBuilder("call")
+                                                                      .addAnnotation(Override.class)
+                                                                      .addModifiers(Modifier.PUBLIC)
+                                                                      .addException(Throwable.class)
+                                                                      .returns(Object.class);
                     if (returns) {
-                        callBuilder.addStatement("return ($T) chain.call()", TypeName.get(method.getReturnType()));
+                        superMethodBuilder.addStatement("return $N.super.$N($L)", autoWeaveTypeName, methodName,
+                                                        methodParameters);
                     } else {
-                        callBuilder.addStatement("chain.call()");
+                        superMethodBuilder.addStatement("$N.super.$N($L)", autoWeaveTypeName, methodName,
+                                                        methodParameters);
+                        superMethodBuilder.addStatement("return null");
+                    }
+                    superBuilder.addMethod(superMethodBuilder.build());
+                    TypeSpec chain = superBuilder.build();
+
+                    if (returns) {
+                        callBuilder.addStatement("return ($T) $L.proceed()", TypeName.get(method.getReturnType()),
+                                                 chain);
+                    } else {
+                        callBuilder.addStatement("$L.proceed()", chain);
                     }
                 }
 
@@ -380,7 +406,7 @@ public class AutoWeaveProcessor extends AbstractProcessor {
     }
 
     private Set<AdviceDescriptor> advice(RoundEnvironment roundEnv) {
-        final Map<TypeElement, Set<ExecutableElement>> adviceMap = new HashMap<>();
+        final Map<TypeElement, Set<ExecutableElement>> adviceMap = new LinkedHashMap<>();
         for (Element advice : roundEnv.getElementsAnnotatedWith(AutoAdvice.class)) {
             advice.accept(new SimpleElementVisitor6<Object, Object>() {
                 @Override
@@ -391,8 +417,6 @@ public class AutoWeaveProcessor extends AbstractProcessor {
                 @Override
                 public Object visitExecutable(ExecutableElement e, Object o) {
                     boolean error = false;
-                    // todo(bnorm) first parameter should extend JoinPoint but not be JoinPoint
-                    // todo(bnorm) class should have a default constructor
 
                     List<? extends VariableElement> parameters = e.getParameters();
                     if (parameters.size() != 1) {
@@ -403,6 +427,7 @@ public class AutoWeaveProcessor extends AbstractProcessor {
                     }
 
                     // todo(bnorm) check first (and only) parameter extends but is not JoinPoint
+                    // todo(bnorm) class should have a default constructor
 
                     if (error) {
                         return null;
@@ -411,7 +436,7 @@ public class AutoWeaveProcessor extends AbstractProcessor {
                     TypeElement type = (TypeElement) e.getEnclosingElement();
                     Set<ExecutableElement> aspectAdvice = adviceMap.get(type);
                     if (aspectAdvice == null) {
-                        adviceMap.put(type, aspectAdvice = new HashSet<>());
+                        adviceMap.put(type, aspectAdvice = new LinkedHashSet<>());
                     }
                     aspectAdvice.add(e);
                     return null;
@@ -419,13 +444,13 @@ public class AutoWeaveProcessor extends AbstractProcessor {
             }, null);
         }
 
-        Set<AdviceDescriptor> adviceDescriptors = new HashSet<>();
+        Set<AdviceDescriptor> adviceDescriptors = new LinkedHashSet<>();
         for (Map.Entry<TypeElement, Set<ExecutableElement>> entry : adviceMap.entrySet()) {
             AspectDescriptor aspectDescriptor = AspectDescriptor.create(entry.getKey());
             for (ExecutableElement element : entry.getValue()) {
                 CrosscutEnum crosscut = getCrosscut(element);
                 AutoAdvice autoAdvice = element.getAnnotation(AutoAdvice.class);
-                Set<TypeMirror> targets = new HashSet<>(valueFrom(autoAdvice));
+                Set<TypeMirror> targets = new LinkedHashSet<>(valueFrom(autoAdvice));
                 adviceDescriptors.add(AdviceDescriptor.create(aspectDescriptor, element, crosscut, targets));
             }
         }
@@ -433,18 +458,18 @@ public class AutoWeaveProcessor extends AbstractProcessor {
     }
 
     private Set<WeaveDescriptor> weave(RoundEnvironment roundEnv, Set<AdviceDescriptor> advice) {
-        final Map<TypeMirror, Set<AdviceDescriptor>> annotationMap = new HashMap<>();
+        final Map<TypeMirror, Set<AdviceDescriptor>> annotationMap = new LinkedHashMap<>();
         for (AdviceDescriptor descriptor : advice) {
             for (TypeMirror target : descriptor.targets()) {
                 Set<AdviceDescriptor> adviceDescriptors = annotationMap.get(target);
                 if (adviceDescriptors == null) {
-                    annotationMap.put(target, adviceDescriptors = new HashSet<>());
+                    annotationMap.put(target, adviceDescriptors = new LinkedHashSet<>());
                 }
                 adviceDescriptors.add(descriptor);
             }
         }
 
-        final Set<WeaveDescriptor> weaveDescriptorBuilder = new HashSet<>();
+        final Set<WeaveDescriptor> weaveDescriptorBuilder = new LinkedHashSet<>();
         for (Element weave : roundEnv.getElementsAnnotatedWith(AutoWeave.class)) {
             weave.accept(new SimpleElementVisitor6<Object, Object>() {
                 @Override
@@ -470,7 +495,7 @@ public class AutoWeaveProcessor extends AbstractProcessor {
 
                     // todo(bnorm) how do override methods fit in?
                     for (ExecutableElement element : ElementFilter.methodsIn(e.getEnclosedElements())) {
-                        List<AdviceDescriptor> adviceDescriptors = new ArrayList<>();
+                        Set<AdviceDescriptor> adviceDescriptors = new LinkedHashSet<>();
                         for (AnnotationMirror annotationMirror : element.getAnnotationMirrors()) {
                             Set<AdviceDescriptor> descriptors = annotationMap.get(annotationMirror.getAnnotationType());
                             if (descriptors != null) {
@@ -479,7 +504,8 @@ public class AutoWeaveProcessor extends AbstractProcessor {
                         }
 
                         if (!adviceDescriptors.isEmpty()) {
-                            weaveMethodDescriptorBuilder.add(WeaveMethodDescriptor.create(element, adviceDescriptors));
+                            weaveMethodDescriptorBuilder.add(
+                                    WeaveMethodDescriptor.create(element, new ArrayList<>(adviceDescriptors)));
                         }
                     }
                 }

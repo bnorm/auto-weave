@@ -1,12 +1,11 @@
 package test;
 
 import com.bnorm.auto.weave.AroundJoinPoint;
-import com.bnorm.auto.weave.internal.Pointcut;
 import com.bnorm.auto.weave.internal.StaticPointcut;
-import com.bnorm.auto.weave.internal.chain.AroundChain;
-import com.bnorm.auto.weave.internal.chain.Chain;
-import com.bnorm.auto.weave.internal.chain.MethodChain;
-import com.bnorm.auto.weave.internal.chain.MethodException;
+import com.bnorm.auto.weave.internal.advice.Advice;
+import com.bnorm.auto.weave.internal.advice.AroundAdvice;
+import com.bnorm.auto.weave.internal.advice.Chain;
+import com.bnorm.auto.weave.internal.advice.MethodException;
 import java.lang.AssertionError;
 import java.lang.Error;
 import java.lang.Object;
@@ -21,6 +20,15 @@ final class AutoWeave_Target extends Target {
 
     private final TraceAspect traceAspect = new TraceAspect();
 
+    private final Advice[] methodAdvice = new Advice[]{
+            new AroundAdvice() {
+                @Override
+                public Object around(AroundJoinPoint joinPoint) {
+                    return traceAspect.around(joinPoint);
+                }
+            }
+    };
+
     AutoWeave_Target() {
         super();
     }
@@ -28,22 +36,13 @@ final class AutoWeave_Target extends Target {
     @Override
     @Trace
     public String method() {
-        Pointcut pointcut = Pointcut.create(this, Arrays.<Object>asList(), methodPointcut);
-        Chain chain;
-        chain = new MethodChain() {
-            @Override
-            public Object method() throws Throwable {
-                return AutoWeave_Target.super.method();
-            }
-        };
-        chain = new AroundChain(chain, pointcut) {
-            @Override
-            public Object around(AroundJoinPoint joinPoint) {
-                return traceAspect.around(joinPoint);
-            }
-        };
         try {
-            return (String) chain.call();
+            return (String) new Chain(methodAdvice, this, methodPointcut, Arrays.<Object>asList()) {
+                @Override
+                public Object call() throws Throwable {
+                    return AutoWeave_Target.super.method();
+                }
+            }.proceed();
         } catch (MethodException e) {
             if (e.getCause() instanceof Error) {
                 throw (Error) e.getCause();

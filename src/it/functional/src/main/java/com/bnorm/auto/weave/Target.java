@@ -15,11 +15,16 @@ public abstract class Target {
     }
 
     @Trace
+    @Validate
     public Future<AtomicBoolean> doSomething(List<AtomicInteger> i) throws IOException {
         return new FutureTask<AtomicBoolean>(new Runnable() {
             @Override
             public void run() {
             }
         }, new AtomicBoolean());
+    }
+
+    @Trace
+    public void doSomething() {
     }
 }
