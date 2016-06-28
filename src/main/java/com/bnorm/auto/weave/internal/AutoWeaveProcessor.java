@@ -35,6 +35,7 @@ import javax.tools.Diagnostic;
 import javax.tools.JavaFileObject;
 
 import com.bnorm.auto.weave.AutoAdvice;
+import com.bnorm.auto.weave.AutoAspect;
 import com.bnorm.auto.weave.AutoWeave;
 import com.bnorm.auto.weave.internal.advice.Advice;
 import com.bnorm.auto.weave.internal.advice.Chain;
@@ -104,9 +105,11 @@ public class AutoWeaveProcessor extends AbstractProcessor {
                 TypeName aspectType = TypeName.get(aspectDescriptor.element().asType());
                 String aspectFieldName = Names.classToVariable(aspectDescriptor.name());
 
-                // todo(bnorm) should this be static?
                 FieldSpec.Builder aspectBuilder = FieldSpec.builder(aspectType, aspectFieldName);
                 aspectBuilder.addModifiers(Modifier.PRIVATE, Modifier.FINAL);
+                if (aspectDescriptor.initialization() == AutoAspect.Initialization.CLASS) {
+                    aspectBuilder.addModifiers(Modifier.STATIC);
+                }
                 aspectBuilder.initializer("new $T()", aspectType);
                 typeBuilder.addField(aspectBuilder.build());
             }
@@ -423,12 +426,15 @@ public class AutoWeaveProcessor extends AbstractProcessor {
 
         Set<AdviceDescriptor> adviceDescriptors = new LinkedHashSet<>();
         for (Map.Entry<TypeElement, Set<ExecutableElement>> entry : adviceMap.entrySet()) {
-            AspectDescriptor aspectDescriptor = AspectDescriptor.create(entry.getKey());
-            for (ExecutableElement element : entry.getValue()) {
-                CrosscutEnum crosscut = getCrosscut(element);
-                AutoAdvice autoAdvice = element.getAnnotation(AutoAdvice.class);
+            TypeElement aspect = entry.getKey();
+            AutoAspect autoAspect = aspect.getAnnotation(AutoAspect.class);
+            AutoAspect.Initialization initialization = autoAspect != null ? autoAspect.init() : AutoAspect.Initialization.INSTANCE;
+            AspectDescriptor aspectDescriptor = AspectDescriptor.create(aspect, initialization);
+            for (ExecutableElement advice : entry.getValue()) {
+                CrosscutEnum crosscut = getCrosscut(advice);
+                AutoAdvice autoAdvice = advice.getAnnotation(AutoAdvice.class);
                 Set<TypeMirror> targets = new LinkedHashSet<>(valueFrom(autoAdvice));
-                adviceDescriptors.add(AdviceDescriptor.create(aspectDescriptor, element, crosscut, targets));
+                adviceDescriptors.add(AdviceDescriptor.create(aspectDescriptor, advice, crosscut, targets));
             }
         }
         return adviceDescriptors;
