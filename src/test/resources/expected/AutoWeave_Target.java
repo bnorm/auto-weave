@@ -2,15 +2,13 @@ package test;
 
 import com.bnorm.auto.weave.AroundJoinPoint;
 import com.bnorm.auto.weave.internal.StaticPointcut;
+import com.bnorm.auto.weave.internal.Util;
 import com.bnorm.auto.weave.internal.advice.Advice;
 import com.bnorm.auto.weave.internal.advice.AroundAdvice;
 import com.bnorm.auto.weave.internal.advice.Chain;
 import com.bnorm.auto.weave.internal.advice.MethodException;
-import java.lang.AssertionError;
-import java.lang.Error;
 import java.lang.Object;
 import java.lang.Override;
-import java.lang.RuntimeException;
 import java.lang.String;
 import java.lang.Throwable;
 import java.util.Arrays;
@@ -44,13 +42,7 @@ final class AutoWeave_Target extends Target {
                 }
             }.proceed();
         } catch (MethodException e) {
-            if (e.getCause() instanceof Error) {
-                throw (Error) e.getCause();
-            } else if (e.getCause() instanceof RuntimeException) {
-                throw (RuntimeException) e.getCause();
-            } else {
-                throw new AssertionError("Please contact the library developer", e.getCause());
-            }
+            throw Util.sneakyThrow(e.getCause());
         }
     }
 }

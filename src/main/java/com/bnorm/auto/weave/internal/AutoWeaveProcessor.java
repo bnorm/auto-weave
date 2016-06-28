@@ -204,32 +204,9 @@ public class AutoWeaveProcessor extends AbstractProcessor {
                 }
 
                 callBuilder.nextControlFlow("catch ($T e)", MethodException.class);
-                {
-                    boolean begin = true;
-                    List<? extends TypeMirror> thrownTypes = method.getThrownTypes();
-                    for (int i = 0, len = thrownTypes.size(); i < len; i++) {
-                        TypeName thrownTypeName = TypeName.get(thrownTypes.get(i));
-                        beginOrNext(callBuilder, thrownTypeName, begin);
-                        callBuilder.addStatement("throw ($T) e.getCause()", thrownTypeName);
-                        begin = false;
-                    }
-                    if (!thrownTypes.contains(elements.getTypeElement(Error.class.getCanonicalName()).asType())) {
-                        beginOrNext(callBuilder, Error.class, begin);
-                        callBuilder.addStatement("throw ($T) e.getCause()", Error.class);
-                        begin = false;
-                    }
-                    if (!thrownTypes.contains(
-                            elements.getTypeElement(RuntimeException.class.getCanonicalName()).asType())) {
-                        beginOrNext(callBuilder, RuntimeException.class, begin);
-                        callBuilder.addStatement("throw ($T) e.getCause()", RuntimeException.class);
-                    }
-                    callBuilder.nextControlFlow("else");
-                    callBuilder.addStatement("throw new $T($S, e.getCause())", AssertionError.class,
-                                             "Please contact the library developer");
-
-                    callBuilder.endControlFlow();
-                }
+                callBuilder.addStatement("throw $T.sneakyThrow(e.getCause())", Util.class);
                 callBuilder.endControlFlow();
+
                 methodBuilder.addCode(callBuilder.build());
 
                 typeBuilder.addMethod(methodBuilder.build());
