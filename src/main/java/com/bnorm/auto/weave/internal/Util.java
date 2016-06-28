@@ -1,6 +1,9 @@
 package com.bnorm.auto.weave.internal;
 
-public class Util {
+public final class Util {
+    private Util() {
+    }
+
     /** Java Puzzlers #43. */
     public static Error sneakyThrow(Throwable t) {
         return Util.<Error>sneakyThrowGeneric(t);
