@@ -8,13 +8,13 @@ import com.google.auto.value.AutoValue;
 @AutoValue
 abstract class AspectDescriptor {
 
-    static AspectDescriptor create(TypeElement element, AutoAspect.Initialization initialization) {
-        return new AutoValue_AspectDescriptor(element, initialization);
+    static AspectDescriptor create(TypeElement element, AutoAspect.AspectInit aspectInit) {
+        return new AutoValue_AspectDescriptor(element, aspectInit);
     }
 
     abstract TypeElement element();
 
-    abstract AutoAspect.Initialization initialization();
+    abstract AutoAspect.AspectInit initialization();
 
     String name() {
         return element().getSimpleName().toString();

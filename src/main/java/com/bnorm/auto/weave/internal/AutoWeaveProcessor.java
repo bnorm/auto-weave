@@ -4,6 +4,7 @@ import java.io.IOException;
 import java.io.Writer;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -53,6 +54,7 @@ import com.squareup.javapoet.TypeSpec;
 import com.squareup.javapoet.TypeVariableName;
 
 import static javax.tools.Diagnostic.Kind.ERROR;
+import static javax.tools.Diagnostic.Kind.WARNING;
 
 @AutoService(Processor.class)
 public class AutoWeaveProcessor extends AbstractProcessor {
@@ -100,13 +102,19 @@ public class AutoWeaveProcessor extends AbstractProcessor {
             typeBuilder.superclass(TypeName.get(type.asType()));
             typeBuilder.addModifiers(Modifier.FINAL);
 
+            Map<AspectDescriptor, String> aspectFieldNames = new HashMap<>();
             for (AspectDescriptor aspectDescriptor : weaveDescriptor.aspects()) {
+                if (aspectDescriptor.initialization() == AutoAspect.AspectInit.SINGLETON) {
+                    continue;
+                }
+
                 TypeName aspectType = TypeName.get(aspectDescriptor.element().asType());
                 String aspectFieldName = Names.classToVariable(aspectDescriptor.name());
+                aspectFieldNames.put(aspectDescriptor, aspectFieldName);
 
                 FieldSpec.Builder aspectBuilder = FieldSpec.builder(aspectType, aspectFieldName);
                 aspectBuilder.addModifiers(Modifier.PRIVATE, Modifier.FINAL);
-                if (aspectDescriptor.initialization() == AutoAspect.Initialization.CLASS) {
+                if (aspectDescriptor.initialization() == AutoAspect.AspectInit.CLASS) {
                     aspectBuilder.addModifiers(Modifier.STATIC);
                 }
                 aspectBuilder.initializer("new $T()", aspectType);
@@ -140,8 +148,7 @@ public class AutoWeaveProcessor extends AbstractProcessor {
                                                                weaveMethodDescriptor);
                 typeBuilder.addField(staticPointcut);
 
-                // ****************************************************************************
-                // todo(bnorm) method advice arrays
+                // method advice arrays
 
                 List<AdviceDescriptor> adviceDescriptors = weaveMethodDescriptor.advice();
                 String adviceArrayName = nameAllocator.newName(methodName + "Advice");
@@ -160,9 +167,22 @@ public class AutoWeaveProcessor extends AbstractProcessor {
                     format.append('\n').append("$L");
 
                     AdviceDescriptor adviceDescriptor = adviceDescriptors.get(i);
-                    String aspectFieldName = adviceDescriptor.aspect().fieldName();
+
+                    CodeBlock.Builder builder = CodeBlock.builder();
                     String aspectMethodName = adviceDescriptor.name();
-                    args[i + 1] = adviceDescriptor.crosscut().getAdvice(aspectFieldName, aspectMethodName);
+                    String prefix = adviceDescriptor.crosscut() != CrosscutEnum.Around ? "" : "return ";
+
+                    AspectDescriptor aspect = adviceDescriptor.aspect();
+                    String aspectFieldName = aspectFieldNames.get(aspect);
+                    if (aspectFieldName == null) {
+                        TypeName aspectName = TypeName.get(aspect.element().asType());
+                        String singletonField = findSingletonName(aspect.element());
+                        builder.addStatement(prefix + "$T.$L.$N(joinPoint)", aspectName, singletonField,
+                                             aspectMethodName);
+                    } else {
+                        builder.addStatement(prefix + "$N.$N(joinPoint)", aspectFieldName, aspectMethodName);
+                    }
+                    args[i + 1] = adviceDescriptor.crosscut().getAdvice(builder.build());
                 }
                 format.append('\n').append("}");
 
@@ -170,8 +190,7 @@ public class AutoWeaveProcessor extends AbstractProcessor {
                 FieldSpec adviceArray = methodAdviceBuilder.build();
                 typeBuilder.addField(adviceArray);
 
-                // todo(bnorm) method advice arrays
-                // ****************************************************************************
+                // super method call
 
                 TypeSpec.Builder superBuilder = TypeSpec.anonymousClassBuilder("$L, this, $L, $T.<Object>asList($L)",
                                                                                adviceArrayName, staticPointcut.name,
@@ -206,6 +225,30 @@ public class AutoWeaveProcessor extends AbstractProcessor {
                                         .build();
             writeSourceFile(javaFile, weaveDescriptor.element());
         }
+    }
+
+    private String findSingletonName(TypeElement aspectElement) {
+        List<Element> fields = new ArrayList<>();
+        for (Element field : aspectElement.getEnclosedElements()) {
+            if (field instanceof VariableElement) {
+                Element fieldType = types.asElement(field.asType());
+                if (types.isSameType(aspectElement.asType(), fieldType.asType())) {
+                    fields.add(field);
+                }
+            }
+        }
+        if (fields.isEmpty()) {
+            messager.printMessage(ERROR, "Singleton aspect does not contain singleton instance", aspectElement);
+            return null;
+        }
+        if (fields.size() > 1) {
+            for (Element field : fields) {
+                messager.printMessage(ERROR,
+                                      aspectElement.getSimpleName() + " contains multiple singleton instances",
+                                      field);
+            }
+        }
+        return fields.get(0).getSimpleName().toString();
     }
 
     private void beginOrNext(CodeBlock.Builder callBuilder, Object thrownTypeName, boolean begin) {
@@ -414,8 +457,8 @@ public class AutoWeaveProcessor extends AbstractProcessor {
         for (Map.Entry<TypeElement, Set<ExecutableElement>> entry : adviceMap.entrySet()) {
             TypeElement aspect = entry.getKey();
             AutoAspect autoAspect = aspect.getAnnotation(AutoAspect.class);
-            AutoAspect.Initialization initialization = autoAspect != null ? autoAspect.init() : AutoAspect.Initialization.INSTANCE;
-            AspectDescriptor aspectDescriptor = AspectDescriptor.create(aspect, initialization);
+            AutoAspect.AspectInit aspectInit = autoAspect != null ? autoAspect.init() : AutoAspect.AspectInit.INSTANCE;
+            AspectDescriptor aspectDescriptor = AspectDescriptor.create(aspect, aspectInit);
             for (ExecutableElement advice : entry.getValue()) {
                 CrosscutEnum crosscut = getCrosscut(advice);
                 AutoAdvice autoAdvice = advice.getAnnotation(AutoAdvice.class);

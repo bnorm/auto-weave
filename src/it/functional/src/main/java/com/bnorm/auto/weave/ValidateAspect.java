@@ -1,7 +1,10 @@
 package com.bnorm.auto.weave;
 
-@AutoAspect(init = AutoAspect.Initialization.CLASS)
-public class ValidateAspect {
+import static com.bnorm.auto.weave.AutoAspect.AspectInit;
+
+@AutoAspect(init = AspectInit.SINGLETON)
+public enum ValidateAspect {
+    instance;
 
     @AutoAdvice(Validate.class)
     public void before(BeforeJoinPoint point) {

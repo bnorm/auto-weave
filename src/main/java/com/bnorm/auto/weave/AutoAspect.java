@@ -9,12 +9,11 @@ import java.lang.annotation.Target;
 @Retention(RetentionPolicy.SOURCE)
 public @interface AutoAspect {
 
-    Initialization init() default Initialization.INSTANCE;
+    AspectInit init() default AspectInit.INSTANCE;
 
-    // todo(bnorm) rename to Init?
-    enum Initialization {
+    enum AspectInit {
         INSTANCE,
-        CLASS
-        // todo(bnorm) SINGLETON
+        CLASS,
+        SINGLETON
     }
 }

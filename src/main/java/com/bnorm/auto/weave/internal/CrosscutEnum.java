@@ -17,6 +17,7 @@ import com.bnorm.auto.weave.internal.advice.AfterReturningAdvice;
 import com.bnorm.auto.weave.internal.advice.AfterThrowingAdvice;
 import com.bnorm.auto.weave.internal.advice.AroundAdvice;
 import com.bnorm.auto.weave.internal.advice.BeforeAdvice;
+import com.squareup.javapoet.CodeBlock;
 import com.squareup.javapoet.MethodSpec;
 import com.squareup.javapoet.TypeSpec;
 
@@ -52,14 +53,13 @@ enum CrosscutEnum {
         this.lowerCaseName = Names.classToVariable(name());
     }
 
-    public TypeSpec getAdvice(String aspectFieldName, String aspectMethodName) {
+    public TypeSpec getAdvice(CodeBlock codeBlock) {
         MethodSpec.Builder methodBuilder = MethodSpec.methodBuilder(lowerCaseName);
         methodBuilder.addAnnotation(Override.class);
         methodBuilder.addModifiers(Modifier.PUBLIC);
         methodBuilder.returns(returnType);
         methodBuilder.addParameter(joinPoint, "joinPoint");
-        methodBuilder.addStatement((returnType == void.class ? "" : "return ") + "$N.$N(joinPoint)", aspectFieldName,
-                                   aspectMethodName);
+        methodBuilder.addCode(codeBlock);
         MethodSpec around = methodBuilder.build();
 
         TypeSpec.Builder chainBuilder = TypeSpec.anonymousClassBuilder("");
