@@ -41,12 +41,21 @@ public abstract class Chain
                 return result;
             } catch (Throwable error) {
                 this.error = error;
-                throw new RuntimeException(error);
+                // Sneaky rethrow any method exceptions
+                // This is horrible, don't do this in normal code, but this removes the
+                // need for complicated exception handling in the generated code.
+                throw Chain.<Error>sneakyThrow(error);
             }
         }
     }
 
     protected abstract Object call() throws Throwable;
+
+    /** Java Puzzlers #43. */
+    @SuppressWarnings("unchecked")
+    private static <T extends Throwable> Error sneakyThrow(Throwable t) throws T {
+        throw (T) t;
+    }
 
     @Override
     public Object result() {

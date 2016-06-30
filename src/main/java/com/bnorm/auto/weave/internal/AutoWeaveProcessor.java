@@ -39,7 +39,6 @@ import com.bnorm.auto.weave.AutoAspect;
 import com.bnorm.auto.weave.AutoWeave;
 import com.bnorm.auto.weave.internal.advice.Advice;
 import com.bnorm.auto.weave.internal.advice.Chain;
-import com.bnorm.auto.weave.internal.advice.MethodException;
 import com.google.auto.service.AutoService;
 import com.squareup.javapoet.AnnotationSpec;
 import com.squareup.javapoet.ClassName;
@@ -174,44 +173,31 @@ public class AutoWeaveProcessor extends AbstractProcessor {
                 // todo(bnorm) method advice arrays
                 // ****************************************************************************
 
-                MethodSpec.Builder methodBuilder = overriding(method);
-                CodeBlock.Builder callBuilder = CodeBlock.builder();
-                callBuilder.beginControlFlow("try");
-                {
-                    TypeSpec.Builder superBuilder = TypeSpec.anonymousClassBuilder(
-                            "$L, this, $L, $T.<Object>asList($L)", adviceArrayName, staticPointcut.name, Arrays.class,
-                            methodParameters);
-                    superBuilder.addSuperinterface(Chain.class);
-                    MethodSpec.Builder superMethodBuilder = MethodSpec.methodBuilder("call")
-                                                                      .addAnnotation(Override.class)
-                                                                      .addModifiers(Modifier.PUBLIC)
-                                                                      .addException(Throwable.class)
-                                                                      .returns(Object.class);
-                    if (returns) {
-                        superMethodBuilder.addStatement("return $N.super.$N($L)", autoWeaveTypeName, methodName,
-                                                        methodParameters);
-                    } else {
-                        superMethodBuilder.addStatement("$N.super.$N($L)", autoWeaveTypeName, methodName,
-                                                        methodParameters);
-                        superMethodBuilder.addStatement("return null");
-                    }
-                    superBuilder.addMethod(superMethodBuilder.build());
-                    TypeSpec chain = superBuilder.build();
-
-                    if (returns) {
-                        callBuilder.addStatement("return ($T) $L.proceed()", TypeName.get(method.getReturnType()),
-                                                 chain);
-                    } else {
-                        callBuilder.addStatement("$L.proceed()", chain);
-                    }
+                TypeSpec.Builder superBuilder = TypeSpec.anonymousClassBuilder("$L, this, $L, $T.<Object>asList($L)",
+                                                                               adviceArrayName, staticPointcut.name,
+                                                                               Arrays.class, methodParameters);
+                superBuilder.addSuperinterface(Chain.class);
+                MethodSpec.Builder superMethodBuilder = MethodSpec.methodBuilder("call")
+                                                                  .addAnnotation(Override.class)
+                                                                  .addModifiers(Modifier.PUBLIC)
+                                                                  .addException(Throwable.class)
+                                                                  .returns(Object.class);
+                if (returns) {
+                    superMethodBuilder.addStatement("return $N.super.$N($L)", autoWeaveTypeName, methodName,
+                                                    methodParameters);
+                } else {
+                    superMethodBuilder.addStatement("$N.super.$N($L)", autoWeaveTypeName, methodName, methodParameters);
+                    superMethodBuilder.addStatement("return null");
                 }
+                superBuilder.addMethod(superMethodBuilder.build());
+                TypeSpec chain = superBuilder.build();
 
-                callBuilder.nextControlFlow("catch ($T e)", MethodException.class);
-                callBuilder.addStatement("throw $T.sneakyThrow(e.getCause())", Util.class);
-                callBuilder.endControlFlow();
-
-                methodBuilder.addCode(callBuilder.build());
-
+                MethodSpec.Builder methodBuilder = overriding(method);
+                if (returns) {
+                    methodBuilder.addStatement("return ($T) $L.proceed()", TypeName.get(method.getReturnType()), chain);
+                } else {
+                    methodBuilder.addStatement("$L.proceed()", chain);
+                }
                 typeBuilder.addMethod(methodBuilder.build());
             }
 
