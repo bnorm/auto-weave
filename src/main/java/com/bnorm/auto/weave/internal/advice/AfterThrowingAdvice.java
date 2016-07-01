@@ -8,9 +8,9 @@ public abstract class AfterThrowingAdvice implements Advice {
     public final Object call(Chain chain) {
         try {
             return chain.proceed();
-        } catch (MethodException e) {
+        } catch (Throwable t) {
             afterThrowing(chain);
-            throw e;
+            throw t;
         }
     }
 
