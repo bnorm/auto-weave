@@ -13,5 +13,5 @@ public abstract class AfterAdvice implements Advice {
         }
     }
 
-    public abstract void after(AfterJoinPoint afterJoinPoint);
+    protected abstract void after(AfterJoinPoint afterJoinPoint);
 }

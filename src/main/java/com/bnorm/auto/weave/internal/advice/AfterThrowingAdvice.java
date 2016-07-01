@@ -14,5 +14,5 @@ public abstract class AfterThrowingAdvice implements Advice {
         }
     }
 
-    public abstract void afterThrowing(AfterThrowingJoinPoint afterThrowingJoinPoint);
+    protected abstract void afterThrowing(AfterThrowingJoinPoint afterThrowingJoinPoint);
 }

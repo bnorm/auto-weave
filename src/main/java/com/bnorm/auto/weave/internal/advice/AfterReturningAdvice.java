@@ -11,5 +11,5 @@ public abstract class AfterReturningAdvice implements Advice {
         return result;
     }
 
-    public abstract void afterReturning(AfterReturningJoinPoint afterReturningJoinPoint);
+    protected abstract void afterReturning(AfterReturningJoinPoint afterReturningJoinPoint);
 }

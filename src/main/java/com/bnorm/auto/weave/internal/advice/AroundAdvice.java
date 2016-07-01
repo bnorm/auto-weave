@@ -9,5 +9,5 @@ public abstract class AroundAdvice implements Advice {
         return around(chain);
     }
 
-    public abstract Object around(AroundJoinPoint aroundJoinPoint);
+    protected abstract Object around(AroundJoinPoint aroundJoinPoint);
 }

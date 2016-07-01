@@ -10,5 +10,5 @@ public abstract class BeforeAdvice implements Advice {
         return chain.proceed();
     }
 
-    public abstract void before(BeforeJoinPoint beforeJoinPoint);
+    protected abstract void before(BeforeJoinPoint beforeJoinPoint);
 }
