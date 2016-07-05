@@ -44,31 +44,40 @@ public class TraceAspect {
 final class AutoWeave_Target extends Target {
     private static final StaticPointcut methodPointcut = StaticPointcut.create("method", Target.class, String.class, Arrays.<Class<?>>asList());
     private final TraceAspect traceAspect = new TraceAspect();
-    private final Advice[] methodAdvice = new Advice[]{
-            new AroundAdvice() {
-                @Override
-                public Object around(AroundJoinPoint joinPoint) {
-                    return traceAspect.around(joinPoint);
-                }
-            }
+    private final Advice[] methodAdvice = new Advice[] {
+    new AroundAdvice() {
+        @Override
+        public Object around(AroundJoinPoint joinPoint) {
+            return traceAspect.around(joinPoint);
+        }
+    }
     };
 
     @Override
     @Trace
     public String method() {
-        try {
-            return (String) new Chain(methodAdvice, this, methodPointcut, Arrays.<Object>asList()) {
-                @Override
-                public Object call() throws Throwable {
-                    return AutoWeave_Target.super.method();
-                }
-            }.proceed();
-        } catch (MethodException e) {
-            throw Util.sneakyThrow(e.getCause());
-        }
+        return (String) new Chain(methodAdvice, this, methodPointcut, Arrays.<Object>asList()) {
+            @Override
+            public Object call() throws Throwable {
+                return AutoWeave_Target.super.method();
+            }
+        }.proceed();
     }
 }
 ```
+
+## Android
+
+This type of AOP can be quite useful in Android because of build
+flavors.  Place the annotations and @AutoWeave annotation on any
+classes you would want to be weaved.  Then always use the AutoWave_*
+generated class when an instance is required.  Even if no aspects are
+applied to the weaved class, an AutoWeave_* class will always be
+generated.
+
+Then, in a build flavor directory - debug for example - add the aspect
+classes with the advice methods.  Now the advice will be applied to the
+weaved classes in the debug build.
 
 ## License
 
