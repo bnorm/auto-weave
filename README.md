@@ -66,6 +66,38 @@ final class AutoWeave_Target extends Target {
 }
 ```
 
+## Advice
+
+There are 5 different types of Advice available in this library:
+ - Before - Called before the method is run
+ - Around - Weaved into the call stack
+ - After - Called after the method is run regardless of result
+ - AfterReturning - Called after the method returns
+ - AfterThrowing - Called after the method throws an exception
+
+To create Advice, create a class with a default constructor.  Then add
+methods annotated with @AutoAdvice and the following signatures:
+ - Before - Returns void with a single parameter: BeforeJoinPoint
+ - Around - Returns Object with a single parameter: AroundJoinPoint
+ - After - Returns void with a single parameter: AfterJoinPoint
+ - AfterReturning - Returns void with a single parameter: AfterReturningJoinPoint
+ - AfterThrowing - Returns void with a single parameter: AfterThrowingJoinPoint
+
+Note: for around advice, AroundJoinPoint.proceed() needs to be called
+at some point because this will continue the call stack and return the
+result of the weaved method.
+
+To control how the advice classes are instantiated, use the @AutoAspect
+annotation.  This annotation allows 3 different instantiation stategies:
+ - Instance - New class with each new instance of weaved class (member)
+ - Class - New class for each weaved class (static member)
+ - Singleton - Class must provide an instance of itself
+
+Note: for singleton aspects, use an enum with a single value (Effective
+Java - Item 3) or have a single `public static final` field with the same
+type as the aspect class.  This instance of the class will be used when
+calling advice.
+
 ## Android
 
 This type of AOP can be quite useful in Android because of build
