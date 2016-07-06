@@ -110,7 +110,6 @@
             </goals>
             <configuration>
               <minimizeJar>true</minimizeJar>
-              <createDependencyReducedPom>false</createDependencyReducedPom>
               <relocations>
                 <relocation>
                   <pattern>com.squareup.javapoet</pattern>
